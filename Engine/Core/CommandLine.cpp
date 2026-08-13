@@ -1,7 +1,8 @@
 #include "CommandLine.h"
 
+#include <algorithm>
+#include <cctype>
 #include <iostream>
-#include <limits>
 #include <stdexcept>
 
 namespace Jevaing::Internal
@@ -53,11 +54,28 @@ namespace Jevaing::Internal
 
                 const std::string value = argv[++index] ? argv[index] : "";
 
+                const bool containsOnlyDigits =
+                    !value.empty() &&
+                    std::all_of(
+                        value.begin(),
+                        value.end(),
+                        [](unsigned char character)
+                        {
+                            return std::isdigit(character) != 0;
+                        }
+                    );
+
+                if (!containsOnlyDigits)
+                {
+                    error = "Invalid value for --frames: " + value;
+                    return false;
+                }
+
                 try
                 {
                     const unsigned long long parsed = std::stoull(value);
 
-                    if (parsed == 0 || parsed > std::numeric_limits<std::uint64_t>::max())
+                    if (parsed == 0)
                     {
                         error = "--frames requires a positive integer.";
                         return false;
