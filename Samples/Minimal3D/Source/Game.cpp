@@ -187,7 +187,7 @@ int main(int argc, char** argv)
     Minimal3DGame game;
 
     Jevaing::GameConfig config;
-    config.Title = "Minimal3D - Jevaing 0.0.9";
+    config.Title = "Minimal3D - Jevaing 0.0.10";
     config.Width = 1280;
     config.Height = 720;
 

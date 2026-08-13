@@ -22,6 +22,33 @@ namespace Jevaing
         return { left.X - right.X, left.Y - right.Y };
     }
 
+    inline Vec2 operator*(const Vec2& value, float scale)
+    {
+        return { value.X * scale, value.Y * scale };
+    }
+
+    inline float Dot(const Vec2& left, const Vec2& right)
+    {
+        return left.X * right.X + left.Y * right.Y;
+    }
+
+    inline float Length(const Vec2& value)
+    {
+        return std::sqrt(Dot(value, value));
+    }
+
+    inline Vec2 Normalize(const Vec2& value)
+    {
+        const float length = Length(value);
+
+        if (length <= 0.000001f)
+        {
+            return {};
+        }
+
+        return value * (1.0f / length);
+    }
+
     struct Vec3
     {
         float X = 0.0f;

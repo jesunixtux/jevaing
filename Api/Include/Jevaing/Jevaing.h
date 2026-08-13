@@ -7,6 +7,7 @@
 #include "Graphics2D.h"
 #include "Graphics3D.h"
 #include "Input.h"
+#include "Physics.h"
 #include "Types.h"
 #include "Project.h"
 #include "Scene.h"

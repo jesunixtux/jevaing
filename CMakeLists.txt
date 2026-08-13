@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 project(
     Jevaing
-    VERSION 0.0.9
+    VERSION 0.0.10
     LANGUAGES C CXX
 )
 
@@ -11,6 +11,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(JEVAING_BUILD_SANDBOX "Build the Jevaing Sandbox executable." ON)
+option(JEVAING_ENABLE_PHYSICS_2D "Build Jevaing 2D physics support." ON)
+option(JEVAING_ENABLE_PHYSICS_3D "Build Jevaing 3D physics support." ON)
+
+include(FetchContent)
 
 # External model import. Prefer an already-installed Assimp package and
 # otherwise fetch a pinned version for reproducible development builds.
@@ -21,8 +25,6 @@ if(TARGET assimp AND NOT TARGET assimp::assimp)
 endif()
 
 if(NOT TARGET assimp::assimp)
-    include(FetchContent)
-
     set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
     set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
@@ -46,8 +48,6 @@ if(NOT TARGET assimp::assimp)
     FetchContent_MakeAvailable(assimp)
 endif()
 
-include(FetchContent)
-
 FetchContent_Declare(
     stb
     GIT_REPOSITORY https://github.com/nothings/stb.git
@@ -55,6 +55,47 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(stb)
+
+if(JEVAING_ENABLE_PHYSICS_2D)
+    set(BOX2D_SAMPLES OFF CACHE BOOL "" FORCE)
+    set(BOX2D_DOCS OFF CACHE BOOL "" FORCE)
+    set(BOX2D_PROFILE OFF CACHE BOOL "" FORCE)
+    set(BOX2D_VALIDATE OFF CACHE BOOL "" FORCE)
+    set(BOX2D_UNIT_TESTS OFF CACHE BOOL "" FORCE)
+
+    FetchContent_Declare(
+        box2d
+        GIT_REPOSITORY https://github.com/erincatto/box2d.git
+        GIT_TAG v3.1.1
+        GIT_SHALLOW TRUE
+    )
+
+    FetchContent_MakeAvailable(box2d)
+endif()
+
+if(JEVAING_ENABLE_PHYSICS_3D)
+    set(DOUBLE_PRECISION OFF CACHE BOOL "" FORCE)
+    set(GENERATE_DEBUG_SYMBOLS ON CACHE BOOL "" FORCE)
+    set(OVERRIDE_CXX_FLAGS OFF CACHE BOOL "" FORCE)
+    set(CROSS_PLATFORM_DETERMINISTIC OFF CACHE BOOL "" FORCE)
+    set(INTERPROCEDURAL_OPTIMIZATION OFF CACHE BOOL "" FORCE)
+    set(FLOATING_POINT_EXCEPTIONS_ENABLED OFF CACHE BOOL "" FORCE)
+    set(CPP_EXCEPTIONS_ENABLED ON CACHE BOOL "" FORCE)
+    set(CPP_RTTI_ENABLED ON CACHE BOOL "" FORCE)
+    set(USE_STATIC_MSVC_RUNTIME_LIBRARY OFF CACHE BOOL "" FORCE)
+    set(OBJECT_LAYER_BITS 16 CACHE STRING "" FORCE)
+    set(USE_AVX512 OFF CACHE BOOL "" FORCE)
+
+    FetchContent_Declare(
+        JoltPhysics
+        GIT_REPOSITORY https://github.com/jrouwe/JoltPhysics.git
+        GIT_TAG v5.6.0
+        GIT_SHALLOW TRUE
+        SOURCE_SUBDIR Build
+    )
+
+    FetchContent_MakeAvailable(JoltPhysics)
+endif()
 
 # Public API
 add_subdirectory(Api)
@@ -71,6 +112,9 @@ add_library(JevaingEngine STATIC
     Engine/Core/Timer.cpp
     Engine/Core/Version.cpp
     Engine/Core/Window.cpp
+    Engine/Physics/PhysicsCommon.cpp
+    Engine/Physics/2D/Box2D/Box2DPhysicsBackend.cpp
+    Engine/Physics/3D/Jolt/JoltPhysicsBackend.cpp
     Engine/Renderer/Renderer.cpp
     geometry/3D/ModelLoader.cpp
     geometry/3D/TextureLoader.cpp
@@ -118,6 +162,17 @@ target_link_libraries(JevaingEngine
     PRIVATE
         assimp::assimp
 )
+
+if(JEVAING_ENABLE_PHYSICS_2D AND TARGET box2d)
+    target_compile_definitions(JevaingEngine PRIVATE JEVAING_HAS_BOX2D=1)
+    target_link_libraries(JevaingEngine PRIVATE box2d)
+endif()
+
+if(JEVAING_ENABLE_PHYSICS_3D AND TARGET Jolt)
+    target_compile_definitions(JevaingEngine PRIVATE JEVAING_HAS_JOLT=1)
+    target_include_directories(JevaingEngine PRIVATE ${joltphysics_SOURCE_DIR}/..)
+    target_link_libraries(JevaingEngine PRIVATE Jolt)
+endif()
 
 if(JEVAING_BUILD_SANDBOX)
     # Sandbox is now a real client of the public API.

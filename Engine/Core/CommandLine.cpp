@@ -139,6 +139,62 @@ namespace Jevaing::Internal
                 options.ProjectTest = true;
                 options.ProjectTestPath = argv[++index] ? argv[index] : "";
             }
+            else if (argument == "--physics-info")
+            {
+                options.PhysicsInfo = true;
+            }
+            else if (argument == "--physics-fixed-step-test")
+            {
+                options.PhysicsFixedStepTest = true;
+            }
+            else if (argument == "--physics-3d-test")
+            {
+                options.Physics3DTest = true;
+            }
+            else if (argument == "--physics-3d-stack-test")
+            {
+                options.Physics3DStackTest = true;
+            }
+            else if (argument == "--physics-3d-sphere-test")
+            {
+                options.Physics3DSphereTest = true;
+            }
+            else if (argument == "--physics-3d-trigger-test")
+            {
+                options.Physics3DTriggerTest = true;
+            }
+            else if (argument == "--physics-3d-raycast-test")
+            {
+                options.Physics3DRaycastTest = true;
+            }
+            else if (argument == "--physics-2d-test")
+            {
+                options.Physics2DTest = true;
+            }
+            else if (argument == "--physics-2d-circle-test")
+            {
+                options.Physics2DCircleTest = true;
+            }
+            else if (argument == "--physics-2d-trigger-test")
+            {
+                options.Physics2DTriggerTest = true;
+            }
+            else if (argument == "--physics-2d-raycast-test")
+            {
+                options.Physics2DRaycastTest = true;
+            }
+            else if (argument == "--physics-scene-serialization-test")
+            {
+                options.PhysicsSceneSerializationTest = true;
+            }
+            else if (argument == "--physics-destroy-test")
+            {
+                options.PhysicsDestroyTest = true;
+            }
+            else if (argument == "--physics-hierarchy-test")
+            {
+                options.PhysicsHierarchyTest = true;
+            }
             else if (argument == "--runtime-test")
             {
                 options.RuntimeTest = true;
@@ -238,6 +294,20 @@ namespace Jevaing::Internal
             << "  --sprite-test              Draw a textured SpriteRenderer2D test.\n"
             << "  --gpu-mesh-test            Validate persistent GPU mesh reuse.\n"
             << "  --project-test <path>      Validate a jevaing.project file.\n"
+            << "  --physics-info             Show physics backend availability.\n"
+            << "  --physics-fixed-step-test  Run deterministic fixed-step physics validation.\n"
+            << "  --physics-3d-test          Run 3D box physics validation.\n"
+            << "  --physics-3d-stack-test    Run 3D box stack physics validation.\n"
+            << "  --physics-3d-sphere-test   Run 3D sphere physics validation.\n"
+            << "  --physics-3d-trigger-test  Run 3D trigger event validation.\n"
+            << "  --physics-3d-raycast-test  Run 3D raycast validation.\n"
+            << "  --physics-2d-test          Run 2D box physics validation.\n"
+            << "  --physics-2d-circle-test   Run 2D circle physics validation.\n"
+            << "  --physics-2d-trigger-test  Run 2D trigger event validation.\n"
+            << "  --physics-2d-raycast-test  Run 2D raycast validation.\n"
+            << "  --physics-scene-serialization-test Run physics Scene save/load validation.\n"
+            << "  --physics-destroy-test     Validate physics body cleanup on DestroyEntity.\n"
+            << "  --physics-hierarchy-test   Validate dynamic-parent rejection policy.\n"
             << "  --runtime-test             Run client callbacks for a fixed smoke test.\n"
             << "  --renderer <backend>       Select: directx, null, vulkan, metal.\n"
             << "  --frames <count>           Exit automatically after N frames.\n\n"

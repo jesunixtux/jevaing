@@ -2,13 +2,60 @@
 
 Jevaing is an experimental open-source graphics and game engine written in C++17 and built with CMake.
 
-> **Current version:** `0.0.9`
+> **Current version:** `0.0.10`
 >
 > **Codename:** `TBD`
 >
 > **Status:** early prototype, not production ready.
 
-## What 0.0.9 Changes
+## What 0.0.10 Changes
+
+Jevaing 0.0.10 adds the first backend-neutral rigid-body physics foundation while keeping SDK details out of gameplay code.
+
+The public Scene/Entity model now supports:
+
+- `RigidBody2DComponent`
+- `BoxCollider2DComponent`
+- `CircleCollider2DComponent`
+- `RigidBody3DComponent`
+- `BoxCollider3DComponent`
+- `SphereCollider3DComponent`
+- `CapsuleCollider3DComponent`
+- `PhysicsMaterial`
+- `PhysicsWorld2D`
+- `PhysicsWorld3D`
+- collision and trigger enter/exit events
+- neutral `Raycast2D` / `Raycast3D` results
+- fixed timestep simulation at `1.0 / 60.0` by default
+
+Backends are selected through neutral enums:
+
+```cpp
+Jevaing::Physics2DBackend::Box2D
+Jevaing::Physics3DBackend::Jolt
+```
+
+Box2D and Jolt headers stay private to `Engine/Physics`. `Api/Include/Jevaing` does not include Box2D, Jolt, DirectX or Win32 headers.
+
+## External Physics Sample
+
+`Samples/Physics3D` is the 0.0.10 proof that physics works outside `JevaingSandbox`.
+
+```powershell
+cmake -S Samples\Physics3D -B build-physics3d
+cmake --build build-physics3d --config Debug
+.\build-physics3d\bin\Debug\Physics3D.exe --frames 120
+```
+
+The sample has its own `CMakeLists.txt`, `jevaing.project`, `Scenes/main.scene` and `Source/Game.cpp`. It includes only:
+
+```cpp
+#include <Jevaing/Jevaing.h>
+```
+
+It demonstrates gravity, static ground, dynamic cube/sphere bodies, a small box stack, trigger overlap, raycast and impulse via the public API.
+
+## What 0.0.9 Changed
 
 Jevaing 0.0.9 moves the engine from internal demos toward real external prototypes.
 
@@ -125,14 +172,43 @@ Public scene API includes:
 
 ## Components
 
-0.0.9 keeps components small and value-oriented:
+Components remain small and value-oriented:
 
 - `TransformComponent`
 - `CameraComponent`
 - `MeshRendererComponent`
 - `SpriteRenderer2DComponent`
+- `RigidBody2DComponent`
+- `BoxCollider2DComponent`
+- `CircleCollider2DComponent`
+- `RigidBody3DComponent`
+- `BoxCollider3DComponent`
+- `SphereCollider3DComponent`
+- `CapsuleCollider3DComponent`
 
-There is no full ECS, reflection system, scripting, prefab system, physics, or editor yet.
+There is no full ECS, reflection system, scripting, prefab system or editor yet.
+
+## Physics
+
+Each `Scene` owns its own `PhysicsWorld2D` and `PhysicsWorld3D`. There is no global physics world.
+
+Transform ownership in 0.0.10 is explicit:
+
+```text
+Static/Kinematic: Scene Transform -> Physics
+Dynamic:          Physics -> Scene Transform
+```
+
+The update order is:
+
+```text
+1. Sync Static/Kinematic Scene transforms into Physics
+2. Step Physics with a fixed timestep accumulator
+3. Sync Dynamic Physics transforms back into Scene
+4. Render
+```
+
+For this MVP, Dynamic rigid bodies under a parent entity are rejected cleanly. This avoids silently building physics on top of the current simplified hierarchy conversion. The restriction is covered by `--physics-hierarchy-test`.
 
 ## Transform Hierarchy
 
@@ -237,6 +313,25 @@ New 0.0.9 tests:
 .\bin\Debug\JevaingSandbox.exe --project-test "Samples\Minimal3D\jevaing.project"
 ```
 
+New 0.0.10 physics tests:
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --physics-info
+.\bin\Debug\JevaingSandbox.exe --physics-fixed-step-test
+.\bin\Debug\JevaingSandbox.exe --physics-3d-test
+.\bin\Debug\JevaingSandbox.exe --physics-3d-stack-test
+.\bin\Debug\JevaingSandbox.exe --physics-3d-sphere-test
+.\bin\Debug\JevaingSandbox.exe --physics-3d-trigger-test
+.\bin\Debug\JevaingSandbox.exe --physics-3d-raycast-test
+.\bin\Debug\JevaingSandbox.exe --physics-2d-test
+.\bin\Debug\JevaingSandbox.exe --physics-2d-circle-test
+.\bin\Debug\JevaingSandbox.exe --physics-2d-trigger-test
+.\bin\Debug\JevaingSandbox.exe --physics-2d-raycast-test
+.\bin\Debug\JevaingSandbox.exe --physics-scene-serialization-test
+.\bin\Debug\JevaingSandbox.exe --physics-destroy-test
+.\bin\Debug\JevaingSandbox.exe --physics-hierarchy-test
+```
+
 Visual tests should be inspected by a person. A passing exit code means the runtime initialized, ran and shut down cleanly.
 
 ## Windows/MSVC Validation
@@ -259,10 +354,28 @@ cmake --build build --config Debug --clean-first
 .\bin\Debug\JevaingSandbox.exe --sprite-test
 .\bin\Debug\JevaingSandbox.exe --gpu-mesh-test
 .\bin\Debug\JevaingSandbox.exe --project-test "Samples\Minimal3D\jevaing.project"
+.\bin\Debug\JevaingSandbox.exe --physics-info
+.\bin\Debug\JevaingSandbox.exe --physics-fixed-step-test
+.\bin\Debug\JevaingSandbox.exe --physics-3d-test
+.\bin\Debug\JevaingSandbox.exe --physics-3d-stack-test
+.\bin\Debug\JevaingSandbox.exe --physics-3d-sphere-test
+.\bin\Debug\JevaingSandbox.exe --physics-3d-trigger-test
+.\bin\Debug\JevaingSandbox.exe --physics-3d-raycast-test
+.\bin\Debug\JevaingSandbox.exe --physics-2d-test
+.\bin\Debug\JevaingSandbox.exe --physics-2d-circle-test
+.\bin\Debug\JevaingSandbox.exe --physics-2d-trigger-test
+.\bin\Debug\JevaingSandbox.exe --physics-2d-raycast-test
+.\bin\Debug\JevaingSandbox.exe --physics-scene-serialization-test
+.\bin\Debug\JevaingSandbox.exe --physics-destroy-test
+.\bin\Debug\JevaingSandbox.exe --physics-hierarchy-test
 
 cmake -S Samples\Minimal3D -B build-minimal3d
 cmake --build build-minimal3d --config Debug
 .\build-minimal3d\bin\Debug\Minimal3D.exe --frames 180
+
+cmake -S Samples\Physics3D -B build-physics3d
+cmake --build build-physics3d --config Debug
+.\build-physics3d\bin\Debug\Physics3D.exe --frames 120
 ```
 
 ## Repository Structure
@@ -278,20 +391,25 @@ jevaing/
 |   |-- Graphics3D.h
 |   |-- Input.h
 |   |-- Jevaing.h
+|   |-- Physics.h
 |   |-- Project.h
 |   |-- Scene.h
 |   |-- Types.h
 |-- Engine/
+|   |-- Physics/
 |-- geometry/
 |-- Sandbox/
 |-- Samples/Minimal3D/
+|-- Samples/Physics3D/
 ```
 
 ## Current Limitations
 
-- Minimal2D was not added in 0.0.9; Minimal3D external build was prioritized.
+- Physics2D sample was not added in 0.0.10; automated 2D physics tests were prioritized.
 - Scene format is intentionally simple text, not full JSON.
-- No editor, prefab system, scripting, physics, audio, networking, particles or gamepad.
+- Dynamic physics bodies cannot be parented in 0.0.10.
+- Collision response is intentionally MVP-level and focused on box/sphere/circle smoke coverage.
+- No editor, prefab system, scripting, audio, networking, particles or gamepad.
 - No skeletal animation, PBR, shadows, Vulkan, Metal, Linux or macOS backend.
 - GPU mesh cache is a first DirectX implementation and may need stronger asset lifetime handles later.
 

@@ -346,6 +346,359 @@ namespace Jevaing::Internal
             return success ? 0 : 2;
         }
 
+        void Simulate(Scene& scene, int steps, double deltaTime)
+        {
+            for (int step = 0; step < steps; ++step)
+            {
+                scene.Update(deltaTime);
+            }
+        }
+
+        Scene CreatePhysics3DScene(bool sphere = false)
+        {
+            Scene scene("physics-3d");
+
+            const EntityId groundId = scene.CreateEntity("Ground");
+            SceneEntity* ground = scene.FindEntity(groundId);
+            ground->Transform.LocalTransform.Position = { 0.0f, -0.5f, 0.0f };
+            ground->Transform.LocalTransform.Scale = { 8.0f, 1.0f, 8.0f };
+            ground->BoxCollider3D = BoxCollider3DComponent{};
+            ground->BoxCollider3D->Size = { 1.0f, 1.0f, 1.0f };
+
+            const EntityId bodyId = scene.CreateEntity(sphere ? "Sphere" : "Cube");
+            SceneEntity* body = scene.FindEntity(bodyId);
+            body->Transform.LocalTransform.Position = { 0.0f, 4.0f, 0.0f };
+            body->RigidBody3D = RigidBody3DComponent{};
+
+            if (sphere)
+            {
+                body->SphereCollider3D = SphereCollider3DComponent{};
+                body->SphereCollider3D->Material.Restitution = 0.1f;
+            }
+            else
+            {
+                body->BoxCollider3D = BoxCollider3DComponent{};
+            }
+
+            return scene;
+        }
+
+        Scene CreatePhysics2DScene(bool circle = false)
+        {
+            Scene scene("physics-2d");
+
+            const EntityId groundId = scene.CreateEntity("Ground");
+            SceneEntity* ground = scene.FindEntity(groundId);
+            ground->Transform.LocalTransform.Position = { 0.0f, -0.5f, 0.0f };
+            ground->Transform.LocalTransform.Scale = { 8.0f, 1.0f, 1.0f };
+            ground->BoxCollider2D = BoxCollider2DComponent{};
+            ground->BoxCollider2D->Size = { 1.0f, 1.0f };
+
+            const EntityId bodyId = scene.CreateEntity(circle ? "Circle" : "Box");
+            SceneEntity* body = scene.FindEntity(bodyId);
+            body->Transform.LocalTransform.Position = { 0.0f, 4.0f, 0.0f };
+            body->RigidBody2D = RigidBody2DComponent{};
+
+            if (circle)
+            {
+                body->CircleCollider2D = CircleCollider2DComponent{};
+            }
+            else
+            {
+                body->BoxCollider2D = BoxCollider2DComponent{};
+            }
+
+            return scene;
+        }
+
+        int RunPhysicsInfo()
+        {
+            PhysicsWorld2D physics2D;
+            PhysicsWorld3D physics3D;
+            physics2D.Initialize();
+            physics3D.Initialize();
+
+            Logger::Info(
+                std::string("Physics 2D backend: ") +
+                Physics2DBackendToString(physics2D.GetBackend()) +
+                (physics2D.IsAvailable() ? " available" : " unavailable")
+            );
+            Logger::Info(
+                std::string("Physics 3D backend: ") +
+                Physics3DBackendToString(physics3D.GetBackend()) +
+                (physics3D.IsAvailable() ? " available" : " unavailable")
+            );
+
+            return ReportTest(
+                physics2D.IsAvailable() && physics3D.IsAvailable(),
+                "Physics backends initialize"
+            ) ? 0 : 2;
+        }
+
+        int RunPhysicsFixedStepTest()
+        {
+            auto runSequence = [](int steps, double renderDelta)
+            {
+                Scene scene = CreatePhysics3DScene();
+                Simulate(scene, steps, renderDelta);
+                return scene.FindEntityByName("Cube")->Transform.LocalTransform.Position.Y;
+            };
+
+            const float y30 = runSequence(30, 1.0 / 30.0);
+            const float y60 = runSequence(60, 1.0 / 60.0);
+            const float y144 = runSequence(144, 1.0 / 144.0);
+
+            const bool success =
+                std::fabs(y30 - y60) < 0.04f &&
+                std::fabs(y144 - y60) < 0.04f;
+
+            return ReportTest(success, "Physics fixed timestep is stable across render deltas") ? 0 : 2;
+        }
+
+        int RunPhysics3DTest()
+        {
+            Scene scene = CreatePhysics3DScene();
+            Simulate(scene, 180, 1.0 / 60.0);
+            const SceneEntity* cube = scene.FindEntityByName("Cube");
+            return ReportTest(cube && cube->Transform.LocalTransform.Position.Y >= 0.45f, "3D dynamic cube rests on static ground") ? 0 : 2;
+        }
+
+        int RunPhysics3DStackTest()
+        {
+            Scene scene("physics-3d-stack");
+            SceneEntity* ground = scene.FindEntity(scene.CreateEntity("Ground"));
+            ground->Transform.LocalTransform.Position = { 0.0f, -0.5f, 0.0f };
+            ground->Transform.LocalTransform.Scale = { 8.0f, 1.0f, 8.0f };
+            ground->BoxCollider3D = BoxCollider3DComponent{};
+
+            for (int index = 0; index < 10; ++index)
+            {
+                SceneEntity* cube = scene.FindEntity(scene.CreateEntity("Cube" + std::to_string(index)));
+                cube->Transform.LocalTransform.Position = { 0.0f, 1.0f + static_cast<float>(index) * 1.05f, 0.0f };
+                cube->RigidBody3D = RigidBody3DComponent{};
+                cube->BoxCollider3D = BoxCollider3DComponent{};
+            }
+
+            Simulate(scene, 240, 1.0 / 60.0);
+
+            bool success = true;
+            for (const SceneEntity& entity : scene.GetEntities())
+            {
+                if (entity.RigidBody3D)
+                {
+                    success &= entity.Transform.LocalTransform.Position.Y >= 0.45f;
+                }
+            }
+
+            return ReportTest(success, "3D dynamic box stack remains above ground") ? 0 : 2;
+        }
+
+        int RunPhysics3DSphereTest()
+        {
+            Scene scene = CreatePhysics3DScene(true);
+            Simulate(scene, 180, 1.0 / 60.0);
+            const SceneEntity* sphere = scene.FindEntityByName("Sphere");
+            return ReportTest(sphere && sphere->Transform.LocalTransform.Position.Y >= 0.45f, "3D dynamic sphere collides with static ground") ? 0 : 2;
+        }
+
+        int RunPhysics3DTriggerTest()
+        {
+            Scene scene("physics-3d-trigger");
+            SceneEntity* trigger = scene.FindEntity(scene.CreateEntity("Trigger"));
+            trigger->Transform.LocalTransform.Position = { 0.0f, 1.0f, 0.0f };
+            trigger->BoxCollider3D = BoxCollider3DComponent{};
+            trigger->BoxCollider3D->Size = { 3.0f, 1.0f, 3.0f };
+            trigger->BoxCollider3D->IsTrigger = true;
+
+            SceneEntity* cube = scene.FindEntity(scene.CreateEntity("Cube"));
+            cube->Transform.LocalTransform.Position = { 0.0f, 3.0f, 0.0f };
+            cube->RigidBody3D = RigidBody3DComponent{};
+            cube->BoxCollider3D = BoxCollider3DComponent{};
+
+            bool entered = false;
+            bool exited = false;
+
+            for (int step = 0; step < 180; ++step)
+            {
+                scene.Update(1.0 / 60.0);
+                for (const CollisionEvent3D& event : scene.GetTriggerEvents3D())
+                {
+                    entered |= event.Type == PhysicsEventType::Enter;
+                    exited |= event.Type == PhysicsEventType::Exit;
+                }
+            }
+
+            return ReportTest(entered && exited, "3D trigger emits enter and exit") ? 0 : 2;
+        }
+
+        int RunPhysics3DRaycastTest()
+        {
+            Scene scene("physics-3d-raycast");
+            const EntityId targetId = scene.CreateEntity("Target");
+            SceneEntity* target = scene.FindEntity(targetId);
+            target->Transform.LocalTransform.Position = { 2.0f, 0.0f, 0.0f };
+            target->BoxCollider3D = BoxCollider3DComponent{};
+            scene.Update(0.0);
+
+            const RaycastHit3D hit =
+                scene.Physics3D().Raycast({ 2.0f, 5.0f, 0.0f }, { 0.0f, -1.0f, 0.0f }, 10.0f);
+
+            const bool success =
+                hit.Hit &&
+                hit.Entity == targetId &&
+                std::fabs(hit.Distance - 4.5f) < 0.05f;
+
+            return ReportTest(success, "3D raycast returns neutral EntityId and distance") ? 0 : 2;
+        }
+
+        int RunPhysics2DTest()
+        {
+            Scene scene = CreatePhysics2DScene();
+            Simulate(scene, 180, 1.0 / 60.0);
+            const SceneEntity* box = scene.FindEntityByName("Box");
+            return ReportTest(box && box->Transform.LocalTransform.Position.Y >= 0.45f, "2D dynamic box rests on static ground") ? 0 : 2;
+        }
+
+        int RunPhysics2DCircleTest()
+        {
+            Scene scene = CreatePhysics2DScene(true);
+            Simulate(scene, 180, 1.0 / 60.0);
+            const SceneEntity* circle = scene.FindEntityByName("Circle");
+            return ReportTest(circle && circle->Transform.LocalTransform.Position.Y >= 0.45f, "2D dynamic circle collides with static ground") ? 0 : 2;
+        }
+
+        int RunPhysics2DTriggerTest()
+        {
+            Scene scene("physics-2d-trigger");
+            SceneEntity* trigger = scene.FindEntity(scene.CreateEntity("Trigger"));
+            trigger->Transform.LocalTransform.Position = { 0.0f, 1.0f, 0.0f };
+            trigger->BoxCollider2D = BoxCollider2DComponent{};
+            trigger->BoxCollider2D->Size = { 3.0f, 1.0f };
+            trigger->BoxCollider2D->IsTrigger = true;
+
+            SceneEntity* box = scene.FindEntity(scene.CreateEntity("Box"));
+            box->Transform.LocalTransform.Position = { 0.0f, 3.0f, 0.0f };
+            box->RigidBody2D = RigidBody2DComponent{};
+            box->BoxCollider2D = BoxCollider2DComponent{};
+
+            bool entered = false;
+            bool exited = false;
+
+            for (int step = 0; step < 180; ++step)
+            {
+                scene.Update(1.0 / 60.0);
+                for (const CollisionEvent2D& event : scene.GetTriggerEvents2D())
+                {
+                    entered |= event.Type == PhysicsEventType::Enter;
+                    exited |= event.Type == PhysicsEventType::Exit;
+                }
+            }
+
+            return ReportTest(entered && exited, "2D trigger emits enter and exit") ? 0 : 2;
+        }
+
+        int RunPhysics2DRaycastTest()
+        {
+            Scene scene("physics-2d-raycast");
+            const EntityId targetId = scene.CreateEntity("Target");
+            SceneEntity* target = scene.FindEntity(targetId);
+            target->Transform.LocalTransform.Position = { 2.0f, 0.0f, 0.0f };
+            target->BoxCollider2D = BoxCollider2DComponent{};
+            scene.Update(0.0);
+
+            const RaycastHit2D hit =
+                scene.Physics2D().Raycast({ 2.0f, 5.0f }, { 0.0f, -1.0f }, 10.0f);
+
+            const bool success =
+                hit.Hit &&
+                hit.Entity == targetId &&
+                std::fabs(hit.Distance - 4.5f) < 0.05f;
+
+            return ReportTest(success, "2D raycast returns neutral EntityId and distance") ? 0 : 2;
+        }
+
+        int RunPhysicsSceneSerializationTest()
+        {
+            Scene scene("physics-serialization");
+            SceneEntity* entity3D = scene.FindEntity(scene.CreateEntityWithId(101, "Body3D"));
+            entity3D->RigidBody3D = RigidBody3DComponent{};
+            entity3D->RigidBody3D->Type = BodyType::Dynamic;
+            entity3D->BoxCollider3D = BoxCollider3DComponent{};
+            entity3D->BoxCollider3D->Size = { 2.0f, 3.0f, 4.0f };
+
+            SceneEntity* entity2D = scene.FindEntity(scene.CreateEntityWithId(202, "Body2D"));
+            entity2D->RigidBody2D = RigidBody2DComponent{};
+            entity2D->RigidBody2D->Type = BodyType::Kinematic;
+            entity2D->CircleCollider2D = CircleCollider2DComponent{};
+            entity2D->CircleCollider2D->Radius = 0.75f;
+
+            const std::filesystem::path scenePath =
+                std::filesystem::temp_directory_path() / "jevaing-physics-serialization.scene";
+            std::string error;
+
+            if (!scene.Save(scenePath.string(), error))
+            {
+                Logger::Error(error);
+                return 2;
+            }
+
+            Scene loaded;
+
+            if (!Scene::LoadFromFile(scenePath.string(), ".", loaded, error))
+            {
+                Logger::Error(error);
+                return 2;
+            }
+
+            std::error_code removeError;
+            std::filesystem::remove(scenePath, removeError);
+
+            const SceneEntity* loaded3D = loaded.FindEntity(101);
+            const SceneEntity* loaded2D = loaded.FindEntity(202);
+            const bool success =
+                loaded3D &&
+                loaded3D->RigidBody3D &&
+                loaded3D->RigidBody3D->Type == BodyType::Dynamic &&
+                loaded3D->BoxCollider3D &&
+                std::fabs(loaded3D->BoxCollider3D->Size.Z - 4.0f) < 0.001f &&
+                loaded2D &&
+                loaded2D->RigidBody2D &&
+                loaded2D->RigidBody2D->Type == BodyType::Kinematic &&
+                loaded2D->CircleCollider2D &&
+                std::fabs(loaded2D->CircleCollider2D->Radius - 0.75f) < 0.001f;
+
+            return ReportTest(success, "Physics components survive Scene save/load") ? 0 : 2;
+        }
+
+        int RunPhysicsDestroyTest()
+        {
+            Scene scene = CreatePhysics3DScene();
+            scene.Update(0.0);
+            const SceneEntity* cube = scene.FindEntityByName("Cube");
+            const EntityId cubeId = cube ? cube->Id : InvalidEntityId;
+            const bool created = scene.Physics3D().HasBody(cubeId);
+            scene.DestroyEntity(cubeId);
+            scene.Update(0.0);
+            const bool destroyed = !scene.Physics3D().HasBody(cubeId);
+
+            return ReportTest(created && destroyed, "DestroyEntity removes physics body") ? 0 : 2;
+        }
+
+        int RunPhysicsHierarchyTest()
+        {
+            Scene scene("physics-hierarchy");
+            const EntityId parentId = scene.CreateEntity("Parent");
+            const EntityId childId = scene.CreateEntity("Child");
+            SceneEntity* child = scene.FindEntity(childId);
+            child->RigidBody3D = RigidBody3DComponent{};
+            child->BoxCollider3D = BoxCollider3DComponent{};
+            std::string error;
+            scene.SetParent(childId, parentId, &error);
+            scene.Update(0.0);
+
+            return ReportTest(!scene.Physics3D().HasBody(childId), "Dynamic physics body with parent is rejected") ? 0 : 2;
+        }
+
         int RunSelfTests()
         {
             Logger::Info("Running Jevaing self-tests...");
@@ -542,6 +895,76 @@ namespace Jevaing::Internal
         if (options.ProjectTest)
         {
             return RunProjectTest(options.ProjectTestPath);
+        }
+
+        if (options.PhysicsInfo)
+        {
+            return RunPhysicsInfo();
+        }
+
+        if (options.PhysicsFixedStepTest)
+        {
+            return RunPhysicsFixedStepTest();
+        }
+
+        if (options.Physics3DTest)
+        {
+            return RunPhysics3DTest();
+        }
+
+        if (options.Physics3DStackTest)
+        {
+            return RunPhysics3DStackTest();
+        }
+
+        if (options.Physics3DSphereTest)
+        {
+            return RunPhysics3DSphereTest();
+        }
+
+        if (options.Physics3DTriggerTest)
+        {
+            return RunPhysics3DTriggerTest();
+        }
+
+        if (options.Physics3DRaycastTest)
+        {
+            return RunPhysics3DRaycastTest();
+        }
+
+        if (options.Physics2DTest)
+        {
+            return RunPhysics2DTest();
+        }
+
+        if (options.Physics2DCircleTest)
+        {
+            return RunPhysics2DCircleTest();
+        }
+
+        if (options.Physics2DTriggerTest)
+        {
+            return RunPhysics2DTriggerTest();
+        }
+
+        if (options.Physics2DRaycastTest)
+        {
+            return RunPhysics2DRaycastTest();
+        }
+
+        if (options.PhysicsSceneSerializationTest)
+        {
+            return RunPhysicsSceneSerializationTest();
+        }
+
+        if (options.PhysicsDestroyTest)
+        {
+            return RunPhysicsDestroyTest();
+        }
+
+        if (options.PhysicsHierarchyTest)
+        {
+            return RunPhysicsHierarchyTest();
         }
 
         if (options.HierarchyTest)
@@ -1119,7 +1542,7 @@ namespace Jevaing::Internal
             const std::size_t meshResources =
                 renderer->GetDebugMeshResourceCreateCount();
 
-            if (meshResources <= 1)
+            if (meshResources == 1)
             {
                 Logger::Info("[PASS] GPU mesh resource cache reused persistent buffers.");
             }

@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -942,10 +943,10 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
 
     bool D3D11Renderer::GetOrCreateMeshResource(
         const Mesh& mesh,
-        D3D11MeshResource*& resource
+        std::shared_ptr<D3D11MeshResource>& resource
     )
     {
-        resource = nullptr;
+        resource.reset();
 
         if (mesh.Empty() || !m_device)
         {
@@ -953,28 +954,33 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
         }
 
         const std::size_t signature = CalculateMeshSignature(mesh);
-        D3D11MeshResource& candidate = m_meshResources[&mesh];
+        std::shared_ptr<D3D11MeshResource>& candidate = m_meshResources[signature];
+
+        if (!candidate)
+        {
+            candidate = std::make_shared<D3D11MeshResource>();
+        }
 
         if (
-            candidate.VertexBuffer &&
-            candidate.IndexBuffer &&
-            candidate.Signature == signature
+            candidate->VertexBuffer &&
+            candidate->IndexBuffer &&
+            candidate->Signature == signature
         )
         {
-            resource = &candidate;
+            resource = candidate;
             return true;
         }
 
-        if (candidate.VertexBuffer)
+        if (candidate->VertexBuffer)
         {
-            candidate.VertexBuffer->Release();
-            candidate.VertexBuffer = nullptr;
+            candidate->VertexBuffer->Release();
+            candidate->VertexBuffer = nullptr;
         }
 
-        if (candidate.IndexBuffer)
+        if (candidate->IndexBuffer)
         {
-            candidate.IndexBuffer->Release();
-            candidate.IndexBuffer = nullptr;
+            candidate->IndexBuffer->Release();
+            candidate->IndexBuffer = nullptr;
         }
 
         std::vector<D3D11Vertex> vertices;
@@ -1006,10 +1012,10 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
         const HRESULT vertexResult = m_device->CreateBuffer(
             &vertexBufferDesc,
             &vertexData,
-            &candidate.VertexBuffer
+            &candidate->VertexBuffer
         );
 
-        if (FAILED(vertexResult) || !candidate.VertexBuffer)
+        if (FAILED(vertexResult) || !candidate->VertexBuffer)
         {
             Logger::Error("DirectX 11 failed to create a persistent mesh vertex buffer.");
             return false;
@@ -1027,21 +1033,21 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
         const HRESULT indexResult = m_device->CreateBuffer(
             &indexBufferDesc,
             &indexData,
-            &candidate.IndexBuffer
+            &candidate->IndexBuffer
         );
 
-        if (FAILED(indexResult) || !candidate.IndexBuffer)
+        if (FAILED(indexResult) || !candidate->IndexBuffer)
         {
             Logger::Error("DirectX 11 failed to create a persistent mesh index buffer.");
-            candidate.VertexBuffer->Release();
-            candidate.VertexBuffer = nullptr;
+            candidate->VertexBuffer->Release();
+            candidate->VertexBuffer = nullptr;
             return false;
         }
 
-        candidate.IndexCount = static_cast<std::uint32_t>(mesh.Indices.size());
-        candidate.Signature = signature;
+        candidate->IndexCount = static_cast<std::uint32_t>(mesh.Indices.size());
+        candidate->Signature = signature;
         ++m_debugMeshResourceCreateCount;
-        resource = &candidate;
+        resource = candidate;
         return true;
     }
 
@@ -1056,9 +1062,15 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
             return;
         }
 
+        std::shared_ptr<D3D11MeshResource> meshResource;
+
+        if (!GetOrCreateMeshResource(mesh, meshResource) || !meshResource)
+        {
+            return;
+        }
+
         D3D11DrawBatch batch;
-        batch.MeshData = &mesh;
-        batch.MeshSignature = CalculateMeshSignature(mesh);
+        batch.MeshResource = std::move(meshResource);
         batch.Constants.Model = transform.ToMatrix();
         batch.Constants.NormalMatrix = CalculateNormalMatrix(transform);
         batch.Constants.ModelViewProjection =
@@ -1521,14 +1533,7 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
 
         for (const D3D11DrawBatch& batch : m_3DDrawBatches)
         {
-            if (!batch.MeshData)
-            {
-                continue;
-            }
-
-            D3D11MeshResource* meshResource = nullptr;
-
-            if (!GetOrCreateMeshResource(*batch.MeshData, meshResource) || !meshResource)
+            if (!batch.MeshResource)
             {
                 continue;
             }
@@ -1538,12 +1543,12 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
             m_context->IASetVertexBuffers(
                 0,
                 1,
-                &meshResource->VertexBuffer,
+                &batch.MeshResource->VertexBuffer,
                 &stride,
                 &offset
             );
             m_context->IASetIndexBuffer(
-                meshResource->IndexBuffer,
+                batch.MeshResource->IndexBuffer,
                 DXGI_FORMAT_R32_UINT,
                 0
             );
@@ -1558,7 +1563,7 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
             );
 
             m_context->DrawIndexed(
-                meshResource->IndexCount,
+                batch.MeshResource->IndexCount,
                 0,
                 0
             );
@@ -1607,14 +1612,16 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
 
         for (auto& meshResource : m_meshResources)
         {
-            if (meshResource.second.VertexBuffer)
+            if (meshResource.second && meshResource.second->VertexBuffer)
             {
-                meshResource.second.VertexBuffer->Release();
+                meshResource.second->VertexBuffer->Release();
+                meshResource.second->VertexBuffer = nullptr;
             }
 
-            if (meshResource.second.IndexBuffer)
+            if (meshResource.second && meshResource.second->IndexBuffer)
             {
-                meshResource.second.IndexBuffer->Release();
+                meshResource.second->IndexBuffer->Release();
+                meshResource.second->IndexBuffer = nullptr;
             }
         }
         m_meshResources.clear();

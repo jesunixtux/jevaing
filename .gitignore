@@ -1,6 +1,9 @@
 .vs/
 build/
 build-minimal3d/
+build-physics3d/
+build-physics2d/
+build-nophysics/
 out/
 
 Samples/Minimal3D/Assets/Models/gummybear.fbx

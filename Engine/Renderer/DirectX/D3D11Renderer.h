@@ -35,10 +35,11 @@ namespace Jevaing::Internal
         float TextureState[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
     };
 
+    struct D3D11MeshResource;
+
     struct D3D11DrawBatch
     {
-        const Mesh* MeshData = nullptr;
-        std::size_t MeshSignature = 0;
+        std::shared_ptr<D3D11MeshResource> MeshResource;
         D3D11ObjectConstants Constants;
         std::shared_ptr<const Texture2D> Texture;
     };
@@ -130,7 +131,7 @@ namespace Jevaing::Internal
         void ReleaseResources();
         bool GetOrCreateMeshResource(
             const Mesh& mesh,
-            D3D11MeshResource*& resource
+            std::shared_ptr<D3D11MeshResource>& resource
         );
         static std::size_t CalculateMeshSignature(const Mesh& mesh);
         static std::string GetTextureCacheKey(const Texture2D& texture);
@@ -145,7 +146,7 @@ namespace Jevaing::Internal
         std::vector<D3D11Vertex> m_frame2DVertices;
         std::vector<D3D112DDrawBatch> m_2DDrawBatches;
         std::vector<D3D11DrawBatch> m_3DDrawBatches;
-        std::unordered_map<const Mesh*, D3D11MeshResource> m_meshResources;
+        std::unordered_map<std::size_t, std::shared_ptr<D3D11MeshResource>> m_meshResources;
         std::unordered_map<std::string, ID3D11ShaderResourceView*> m_textureViews;
         std::size_t m_debugMeshResourceCreateCount = 0;
         std::size_t m_vertexCapacity = 0;

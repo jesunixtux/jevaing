@@ -21,6 +21,13 @@ namespace Jevaing
         std::optional<CameraComponent> Camera;
         std::optional<MeshRendererComponent> MeshRenderer;
         std::optional<SpriteRenderer2DComponent> SpriteRenderer2D;
+        std::optional<RigidBody2DComponent> RigidBody2D;
+        std::optional<BoxCollider2DComponent> BoxCollider2D;
+        std::optional<CircleCollider2DComponent> CircleCollider2D;
+        std::optional<RigidBody3DComponent> RigidBody3D;
+        std::optional<BoxCollider3DComponent> BoxCollider3D;
+        std::optional<SphereCollider3DComponent> SphereCollider3D;
+        std::optional<CapsuleCollider3DComponent> CapsuleCollider3D;
     };
 
     class Scene
@@ -65,16 +72,36 @@ namespace Jevaing
         const std::vector<SceneEntity>& GetEntities() const;
         std::vector<SceneEntity>& GetEntities();
 
+        PhysicsWorld2D& Physics2D();
+        const PhysicsWorld2D& Physics2D() const;
+        PhysicsWorld3D& Physics3D();
+        const PhysicsWorld3D& Physics3D() const;
+
+        void SetPhysicsSettings(const PhysicsSettings& settings);
+        const PhysicsSettings& GetPhysicsSettings() const;
+
+        const std::vector<CollisionEvent2D>& GetCollisionEvents2D() const;
+        const std::vector<CollisionEvent2D>& GetTriggerEvents2D() const;
+        const std::vector<CollisionEvent3D>& GetCollisionEvents3D() const;
+        const std::vector<CollisionEvent3D>& GetTriggerEvents3D() const;
+
     private:
         EntityId AllocateEntityId();
         bool WouldCreateCycle(EntityId child, EntityId parent) const;
         void RemoveChildLink(EntityId parent, EntityId child);
         void AttachLoadedAssets(const std::string& assetRoot, std::string& error);
+        void EnsurePhysicsInitialized();
+        void SyncSceneToPhysics();
+        void SyncPhysicsToScene();
 
     private:
         std::string m_name;
         std::vector<SceneEntity> m_entities;
         EntityId m_nextEntityId = 1;
         bool m_started = false;
+        PhysicsSettings m_physicsSettings;
+        PhysicsWorld2D m_physics2D;
+        PhysicsWorld3D m_physics3D;
+        double m_physicsAccumulator = 0.0;
     };
 }

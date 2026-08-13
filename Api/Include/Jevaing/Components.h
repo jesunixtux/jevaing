@@ -4,6 +4,7 @@
 #include <string>
 
 #include "Assets.h"
+#include "Physics.h"
 #include "Types.h"
 
 namespace Jevaing
