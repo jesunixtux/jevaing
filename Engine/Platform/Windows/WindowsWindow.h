@@ -18,6 +18,7 @@ namespace Jevaing::Platform
 
         void Show() override;
         bool ProcessEvents() override;
+        void* GetNativeHandle() const override;
 
     protected:
         bool Initialize(const Internal::WindowConfig& config) override;
