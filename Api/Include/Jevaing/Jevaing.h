@@ -2,6 +2,7 @@
 
 #include "Game.h"
 #include "Graphics2D.h"
+#include "Graphics3D.h"
 #include "Input.h"
 #include "Types.h"
 

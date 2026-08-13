@@ -4,6 +4,7 @@
 #include <string>
 
 #include <Jevaing/Graphics2D.h>
+#include <Jevaing/Graphics3D.h>
 
 namespace Jevaing::Internal
 {
@@ -21,7 +22,8 @@ namespace Jevaing::Internal
     {
         None,
         Triangle,
-        Penguin
+        Penguin,
+        Cube
     };
 
     struct RendererConfig
@@ -30,7 +32,7 @@ namespace Jevaing::Internal
         RendererTestPattern TestPattern = RendererTestPattern::None;
     };
 
-    class Renderer : public Jevaing::Graphics2D
+    class Renderer : public Jevaing::Graphics2D, public Jevaing::Graphics3D
     {
     public:
         ~Renderer() override = default;

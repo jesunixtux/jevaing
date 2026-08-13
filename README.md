@@ -4,13 +4,27 @@ Jevaing is an experimental open-source graphics and game engine written in C++.
 
 The project is being built step by step with a small core, platform-specific code behind abstractions, renderer-specific code behind a common interface, and no mandatory dependency on a store, account system, launcher or online service.
 
-> **Current version:** `0.0.6`
+> **Current version:** `0.0.7`
 >
 > **Codename:** `BIG BEAR GUMMY`
 >
 > **Status:** early prototype — not production ready.
 
-## What 0.0.6 changes
+## What 0.0.7 changes
+
+Jevaing 0.0.7 adds the first real 3D foundation while preserving the existing 2D path.
+
+The public API now includes `Vec3`, `Mat4`, `Transform`, `PerspectiveCamera` and `Graphics3D`. The DirectX 11 backend creates a depth buffer, uploads a model-view-projection matrix through a constant buffer, and can draw a minimal colored cube.
+
+The Sandbox is now an interactive 3D client: `WASD` moves the cube, arrow keys rotate it, `Space` changes its color, and `ESC` closes the window.
+
+The new 3D smoke test is available with:
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --graphics-test-3d
+```
+
+## What 0.0.6 changed
 
 BIG BEAR GUMMY is the first Jevaing version aimed at being a base for writing an actual client program instead of only proving that individual engine subsystems work.
 
@@ -96,18 +110,18 @@ cmake --build build --config Debug
 The default Sandbox should open a window titled:
 
 ```text
-Jevaing 0.0.6 - BIG BEAR GUMMY Sandbox
+Jevaing 0.0.7 - BIG BEAR GUMMY Sandbox
 ```
 
-It displays a small blocky gummy bear built from public `DrawQuad` calls.
+It displays a colored 3D cube drawn through the public `Graphics3D` API, with a small 2D overlay drawn through `Graphics2D`.
 
 Controls:
 
 | Input | Action |
 |---|---|
-| `WASD` | Move the gummy bear |
-| Arrow keys | Move the gummy bear |
-| `Space` | Change the gummy bear color while held |
+| `WASD` | Move the cube |
+| Arrow keys | Rotate the cube |
+| `Space` | Change the cube color while held |
 | `ESC` | Close the window |
 
 The demo is deliberately simple. Its purpose is to prove this path:
@@ -116,8 +130,8 @@ The demo is deliberately simple. Its purpose is to prove this path:
 Sandbox state
     -> OnUpdate(deltaTime)
     -> Jevaing::Input
-    -> OnRender(Graphics2D&)
-    -> DrawQuad / DrawTriangle
+    -> OnRender(Graphics2D&) / OnRender(Graphics3D&)
+    -> DrawQuad / DrawTriangle / DrawCube
     -> DirectX 11
     -> GPU
 ```
@@ -176,7 +190,12 @@ The public API currently includes:
 Jevaing::Game
 Jevaing::GameConfig
 Jevaing::Graphics2D
+Jevaing::Graphics3D
 Jevaing::Vec2
+Jevaing::Vec3
+Jevaing::Mat4
+Jevaing::Transform
+Jevaing::PerspectiveCamera
 Jevaing::Color
 Jevaing::Key
 Jevaing::Input
@@ -195,6 +214,7 @@ A client `Game` can override:
 void OnStart();
 void OnUpdate(double deltaTime);
 void OnRender(Jevaing::Graphics2D& graphics);
+void OnRender(Jevaing::Graphics3D& graphics);
 void OnResize(int width, int height);
 void OnStop();
 ```
@@ -216,6 +236,7 @@ loop:
     OnUpdate(deltaTime)
     BeginFrame
     OnRender(Graphics2D)
+    OnRender(Graphics3D)
     EndFrame / Present
 
 OnStop
@@ -308,7 +329,7 @@ The command-line testing introduced in ARPA+ remains available.
 Expected:
 
 ```text
-Jevaing 0.0.6 - BIG BEAR GUMMY
+Jevaing 0.0.7 - BIG BEAR GUMMY
 ```
 
 ### Headless core tests
@@ -320,7 +341,7 @@ $LASTEXITCODE
 
 A healthy run returns `0`.
 
-The self-test currently validates the version/codename, timer, renderer parsing/availability, initial input state and default `GameConfig` dimensions.
+The self-test currently validates the version/codename, timer, 3D math/camera basics, renderer parsing/availability, initial input state and default `GameConfig` dimensions.
 
 ### Renderer information
 
@@ -348,6 +369,12 @@ Default renderer: DirectX
 
 ```powershell
 .\bin\Debug\JevaingSandbox.exe --graphics-test-penguin
+```
+
+### 3D cube graphics test
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --graphics-test-3d
 ```
 
 ### Client runtime smoke test
@@ -462,7 +489,7 @@ jevaing/
 | Backend | Status | Current capability |
 |---|---|---|
 | Null | Working | Client/runtime testing without GPU work |
-| DirectX 11 | Working prototype | Clear, dynamic colored 2D triangles/quads, resize, present |
+| DirectX 11 | Working prototype | Clear, dynamic colored 2D triangles/quads, depth-buffered 3D cube, resize, present |
 | Vulkan | Planned | Not implemented |
 | Metal | Planned | Not implemented |
 
@@ -524,6 +551,16 @@ jevaing/
 - [x] Interactive Sandbox client.
 - [x] Runtime callback smoke test.
 
+### 0.0.7 - BIG BEAR GUMMY
+
+- [x] Public `Vec3`, `Mat4`, `Transform` and `PerspectiveCamera`.
+- [x] Public backend-neutral `Graphics3D` API.
+- [x] DirectX 11 depth buffer.
+- [x] DirectX 11 model-view-projection constant buffer.
+- [x] Minimal `DrawCube`.
+- [x] `--graphics-test-3d` cube smoke test.
+- [x] Interactive 3D Sandbox client.
+
 ### Next useful foundations
 
 - [ ] Mouse input.
@@ -531,7 +568,6 @@ jevaing/
 - [ ] Textures and image loading.
 - [ ] Sprite drawing.
 - [ ] 2D camera/world coordinates.
-- [ ] Basic transform type.
 - [ ] Asset handles/cache.
 - [ ] Scene foundation.
 - [ ] Entity/component design.

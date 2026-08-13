@@ -42,6 +42,10 @@ namespace Jevaing::Internal
             {
                 options.PenguinGraphicsTest = true;
             }
+            else if (argument == "--graphics-test-3d")
+            {
+                options.GraphicsTest3D = true;
+            }
             else if (argument == "--runtime-test")
             {
                 options.RuntimeTest = true;
@@ -122,6 +126,7 @@ namespace Jevaing::Internal
             << "  --renderer-info            Show renderer backend availability.\n"
             << "  --graphics-test            Run the colored triangle GPU smoke test.\n"
             << "  --graphics-test-penguin    Run the penguin GPU smoke test.\n"
+            << "  --graphics-test-3d         Run the rotating cube GPU smoke test.\n"
             << "  --runtime-test             Run client callbacks for a fixed smoke test.\n"
             << "  --renderer <backend>       Select: directx, null, vulkan, metal.\n"
             << "  --frames <count>           Exit automatically after N frames.\n\n"
@@ -131,6 +136,7 @@ namespace Jevaing::Internal
             << "  JevaingSandbox.exe --renderer-info\n"
             << "  JevaingSandbox.exe --graphics-test\n"
             << "  JevaingSandbox.exe --graphics-test-penguin\n"
+            << "  JevaingSandbox.exe --graphics-test-3d\n"
             << "  JevaingSandbox.exe --runtime-test\n"
             << "  JevaingSandbox.exe --renderer directx --frames 300\n"
             << "  JevaingSandbox.exe --renderer null --frames 60\n";

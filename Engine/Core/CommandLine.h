@@ -13,6 +13,7 @@ namespace Jevaing::Internal
         bool ShowRendererInfo = false;
         bool GraphicsTest = false;
         bool PenguinGraphicsTest = false;
+        bool GraphicsTest3D = false;
         bool RuntimeTest = false;
         bool HasFrameLimit = false;
         std::uint64_t FrameLimit = 0;

@@ -7,45 +7,65 @@ namespace
     class BigBearGummyDemo final : public Jevaing::Game
     {
     public:
+        void OnResize(int width, int height) override
+        {
+            if (width > 0 && height > 0)
+            {
+                m_camera.AspectRatio =
+                    static_cast<float>(width) /
+                    static_cast<float>(height);
+            }
+        }
+
         void OnUpdate(double deltaTime) override
         {
-            constexpr float Speed = 0.90f;
-            const float movement = Speed * static_cast<float>(deltaTime);
+            constexpr float MoveSpeed = 1.35f;
+            constexpr float RotateSpeed = 1.75f;
+            const float movement = MoveSpeed * static_cast<float>(deltaTime);
+            const float rotation = RotateSpeed * static_cast<float>(deltaTime);
 
-            if (
-                Jevaing::Input::IsKeyDown(Jevaing::Key::A) ||
-                Jevaing::Input::IsKeyDown(Jevaing::Key::Left)
-            )
+            if (Jevaing::Input::IsKeyDown(Jevaing::Key::A))
             {
-                m_position.X -= movement;
+                m_transform.Position.X -= movement;
             }
 
-            if (
-                Jevaing::Input::IsKeyDown(Jevaing::Key::D) ||
-                Jevaing::Input::IsKeyDown(Jevaing::Key::Right)
-            )
+            if (Jevaing::Input::IsKeyDown(Jevaing::Key::D))
             {
-                m_position.X += movement;
+                m_transform.Position.X += movement;
             }
 
-            if (
-                Jevaing::Input::IsKeyDown(Jevaing::Key::W) ||
-                Jevaing::Input::IsKeyDown(Jevaing::Key::Up)
-            )
+            if (Jevaing::Input::IsKeyDown(Jevaing::Key::W))
             {
-                m_position.Y += movement;
+                m_transform.Position.Z += movement;
             }
 
-            if (
-                Jevaing::Input::IsKeyDown(Jevaing::Key::S) ||
-                Jevaing::Input::IsKeyDown(Jevaing::Key::Down)
-            )
+            if (Jevaing::Input::IsKeyDown(Jevaing::Key::S))
             {
-                m_position.Y -= movement;
+                m_transform.Position.Z -= movement;
             }
 
-            m_position.X = std::clamp(m_position.X, -0.78f, 0.78f);
-            m_position.Y = std::clamp(m_position.Y, -0.52f, 0.48f);
+            if (Jevaing::Input::IsKeyDown(Jevaing::Key::Left))
+            {
+                m_transform.Rotation.Y -= rotation;
+            }
+
+            if (Jevaing::Input::IsKeyDown(Jevaing::Key::Right))
+            {
+                m_transform.Rotation.Y += rotation;
+            }
+
+            if (Jevaing::Input::IsKeyDown(Jevaing::Key::Up))
+            {
+                m_transform.Rotation.X -= rotation;
+            }
+
+            if (Jevaing::Input::IsKeyDown(Jevaing::Key::Down))
+            {
+                m_transform.Rotation.X += rotation;
+            }
+
+            m_transform.Position.X = std::clamp(m_transform.Position.X, -1.45f, 1.45f);
+            m_transform.Position.Z = std::clamp(m_transform.Position.Z, -0.80f, 1.80f);
 
             m_spaceHeld = Jevaing::Input::IsKeyDown(Jevaing::Key::Space);
         }
@@ -60,49 +80,41 @@ namespace
                 { 0.10f, 0.16f, 0.22f, 1.0f }
             );
 
-            const Jevaing::Color gummy = m_spaceHeld
-                ? Jevaing::Color{ 0.28f, 0.92f, 0.48f, 1.0f }
-                : Jevaing::Color{ 0.96f, 0.38f, 0.18f, 1.0f };
-
-            const Jevaing::Color gummyLight = m_spaceHeld
-                ? Jevaing::Color{ 0.55f, 1.0f, 0.68f, 1.0f }
-                : Jevaing::Color{ 1.0f, 0.63f, 0.30f, 1.0f };
-
-            const Jevaing::Color dark = { 0.07f, 0.05f, 0.08f, 1.0f };
-
-            const float x = m_position.X;
-            const float y = m_position.Y;
-
-            // Shadow.
             graphics.DrawQuad(
-                { x, y - 0.30f },
-                { 0.38f, 0.06f },
-                { 0.015f, 0.020f, 0.030f, 1.0f }
+                { 0.0f, -0.03f },
+                { 0.018f, 0.018f },
+                { 0.90f, 0.94f, 1.0f, 1.0f }
             );
+        }
 
-            // Legs and arms.
-            graphics.DrawQuad({ x - 0.10f, y - 0.22f }, { 0.11f, 0.18f }, gummy);
-            graphics.DrawQuad({ x + 0.10f, y - 0.22f }, { 0.11f, 0.18f }, gummy);
-            graphics.DrawQuad({ x - 0.18f, y - 0.01f }, { 0.10f, 0.22f }, gummy);
-            graphics.DrawQuad({ x + 0.18f, y - 0.01f }, { 0.10f, 0.22f }, gummy);
+        void OnRender(Jevaing::Graphics3D& graphics) override
+        {
+            graphics.SetCamera(m_camera);
 
-            // Body and head.
-            graphics.DrawQuad({ x, y - 0.03f }, { 0.31f, 0.38f }, gummy);
-            graphics.DrawQuad({ x, y + 0.25f }, { 0.29f, 0.25f }, gummy);
+            const Jevaing::Color cube = m_spaceHeld
+                ? Jevaing::Color{ 0.30f, 0.95f, 0.54f, 1.0f }
+                : Jevaing::Color{ 0.25f, 0.65f, 1.0f, 1.0f };
 
-            // Ears.
-            graphics.DrawQuad({ x - 0.105f, y + 0.39f }, { 0.095f, 0.095f }, gummy);
-            graphics.DrawQuad({ x + 0.105f, y + 0.39f }, { 0.095f, 0.095f }, gummy);
-
-            // Muzzle and face.
-            graphics.DrawQuad({ x, y + 0.205f }, { 0.15f, 0.09f }, gummyLight);
-            graphics.DrawQuad({ x - 0.060f, y + 0.285f }, { 0.035f, 0.045f }, dark);
-            graphics.DrawQuad({ x + 0.060f, y + 0.285f }, { 0.035f, 0.045f }, dark);
-            graphics.DrawQuad({ x, y + 0.225f }, { 0.045f, 0.035f }, dark);
+            graphics.DrawCube(m_transform, cube);
         }
 
     private:
-        Jevaing::Vec2 m_position = { 0.0f, -0.18f };
+        Jevaing::PerspectiveCamera m_camera = {
+            { 0.0f, 1.15f, -4.8f },
+            { 0.0f, 0.0f, 0.0f },
+            { 0.0f, 1.0f, 0.0f },
+            Jevaing::Pi / 3.0f,
+            16.0f / 9.0f,
+            0.1f,
+            100.0f
+        };
+
+        Jevaing::Transform m_transform = {
+            { 0.0f, 0.0f, 0.0f },
+            { 0.35f, 0.65f, 0.0f },
+            { 1.20f, 1.20f, 1.20f }
+        };
+
         bool m_spaceHeld = false;
     };
 }
@@ -112,7 +124,7 @@ int main(int argc, char** argv)
     BigBearGummyDemo game;
 
     Jevaing::GameConfig config;
-    config.Title = "Jevaing 0.0.6 - BIG BEAR GUMMY Sandbox";
+    config.Title = "Jevaing 0.0.7 - BIG BEAR GUMMY Sandbox";
     config.Width = 1280;
     config.Height = 720;
 

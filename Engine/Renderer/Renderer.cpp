@@ -57,6 +57,17 @@ namespace Jevaing::Internal
             {
             }
 
+            void SetCamera(const PerspectiveCamera&) override
+            {
+            }
+
+            void DrawCube(
+                const Transform&,
+                const Color&
+            ) override
+            {
+            }
+
             const char* GetName() const override
             {
                 return "Null Renderer";

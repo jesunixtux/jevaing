@@ -3,6 +3,7 @@
 #include <string>
 
 #include "Graphics2D.h"
+#include "Graphics3D.h"
 
 namespace Jevaing
 {
@@ -27,6 +28,10 @@ namespace Jevaing
         }
 
         virtual void OnRender(Graphics2D&)
+        {
+        }
+
+        virtual void OnRender(Graphics3D&)
         {
         }
 

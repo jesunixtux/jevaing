@@ -57,6 +57,35 @@ namespace Jevaing::Internal
                 "Timer produces a positive delta time"
             );
 
+            const Vec3 cross = Cross(
+                { 1.0f, 0.0f, 0.0f },
+                { 0.0f, 1.0f, 0.0f }
+            );
+            success &= ReportTest(
+                cross.Z == 1.0f,
+                "Vec3 cross product follows the 3D basis"
+            );
+
+            Transform transform;
+            transform.Position = { 1.0f, 2.0f, 3.0f };
+            const Mat4 model = transform.ToMatrix();
+            success &= ReportTest(
+                model.M[3][0] == 1.0f &&
+                model.M[3][1] == 2.0f &&
+                model.M[3][2] == 3.0f,
+                "Transform produces a 3D model matrix"
+            );
+
+            PerspectiveCamera camera;
+            camera.AspectRatio = 16.0f / 9.0f;
+            const Mat4 projection = camera.GetProjectionMatrix();
+            success &= ReportTest(
+                projection.M[0][0] > 0.0f &&
+                projection.M[1][1] > 0.0f &&
+                projection.M[2][3] == 1.0f,
+                "PerspectiveCamera produces a perspective projection"
+            );
+
             RendererBackend parsedBackend = RendererBackend::None;
             success &= ReportTest(
                 RendererBackendFromString("directx", parsedBackend) &&
@@ -187,16 +216,23 @@ namespace Jevaing::Internal
             return 0;
         }
 
-        if (options.GraphicsTest && options.PenguinGraphicsTest)
+        const int graphicsTestCount =
+            (options.GraphicsTest ? 1 : 0) +
+            (options.PenguinGraphicsTest ? 1 : 0) +
+            (options.GraphicsTest3D ? 1 : 0);
+
+        if (graphicsTestCount > 1)
         {
             Logger::Error(
-                "--graphics-test and --graphics-test-penguin cannot be used together."
+                "Only one graphics test can be selected at a time."
             );
             return 2;
         }
 
         const bool graphicsTestRequested =
-            options.GraphicsTest || options.PenguinGraphicsTest;
+            options.GraphicsTest ||
+            options.PenguinGraphicsTest ||
+            options.GraphicsTest3D;
 
         if (options.RuntimeTest && graphicsTestRequested)
         {
@@ -298,6 +334,10 @@ namespace Jevaing::Internal
         {
             rendererConfig.TestPattern = RendererTestPattern::Penguin;
         }
+        else if (options.GraphicsTest3D)
+        {
+            rendererConfig.TestPattern = RendererTestPattern::Cube;
+        }
         else if (options.GraphicsTest || !game)
         {
             rendererConfig.TestPattern = RendererTestPattern::Triangle;
@@ -329,6 +369,10 @@ namespace Jevaing::Internal
         if (options.PenguinGraphicsTest)
         {
             Logger::Info("BIG BEAR GUMMY penguin graphics test enabled.");
+        }
+        else if (options.GraphicsTest3D)
+        {
+            Logger::Info("BIG BEAR GUMMY 3D cube graphics test enabled.");
         }
         else if (options.GraphicsTest)
         {
@@ -424,7 +468,8 @@ namespace Jevaing::Internal
 
                 if (clientMode)
                 {
-                    game->OnRender(*renderer);
+                    game->OnRender(static_cast<Graphics2D&>(*renderer));
+                    game->OnRender(static_cast<Graphics3D&>(*renderer));
                     ++renderCalls;
                 }
 
@@ -462,6 +507,10 @@ namespace Jevaing::Internal
         if (exitCode == 0 && options.PenguinGraphicsTest)
         {
             Logger::Info("[PASS] BIG BEAR GUMMY penguin graphics test completed.");
+        }
+        else if (exitCode == 0 && options.GraphicsTest3D)
+        {
+            Logger::Info("[PASS] BIG BEAR GUMMY 3D cube graphics test completed.");
         }
         else if (exitCode == 0 && options.GraphicsTest)
         {
