@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 project(
     Jevaing
-    VERSION 0.0.3
+    VERSION 0.0.4
     LANGUAGES CXX
 )
 
@@ -16,6 +16,7 @@ add_subdirectory(Api)
 # Jevaing core
 add_library(JevaingEngine STATIC
     Engine/Core/Application.cpp
+    Engine/Core/CommandLine.cpp
     Engine/Core/Logger.cpp
     Engine/Core/Timer.cpp
     Engine/Core/Version.cpp
@@ -26,6 +27,7 @@ add_library(JevaingEngine STATIC
 if(WIN32)
     target_sources(JevaingEngine PRIVATE
         Engine/Platform/Windows/WindowsWindow.cpp
+        Engine/Renderer/DirectX/D3D11Renderer.cpp
     )
 
     target_compile_definitions(JevaingEngine PRIVATE
@@ -38,6 +40,8 @@ if(WIN32)
         PRIVATE
             user32
             gdi32
+            d3d11
+            dxgi
     )
 endif()
 
