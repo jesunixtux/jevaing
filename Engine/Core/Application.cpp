@@ -162,6 +162,17 @@ namespace Jevaing::Internal
             return 0;
         }
 
+        if (options.GraphicsTest && options.PenguinGraphicsTest)
+        {
+            Logger::Error(
+                "--graphics-test and --graphics-test-penguin cannot be used together."
+            );
+            return 2;
+        }
+
+        const bool graphicsTestRequested =
+            options.GraphicsTest || options.PenguinGraphicsTest;
+
         constexpr int WindowWidth = 1280;
         constexpr int WindowHeight = 720;
 
@@ -191,13 +202,13 @@ namespace Jevaing::Internal
             return 2;
         }
 
-        if (options.GraphicsTest && selectedBackend == RendererBackend::None)
+        if (graphicsTestRequested && selectedBackend == RendererBackend::None)
         {
-            Logger::Error("--graphics-test requires a GPU-backed renderer.");
+            Logger::Error("Graphics tests require a GPU-backed renderer.");
             return 2;
         }
 
-        if (options.GraphicsTest && !options.HasFrameLimit)
+        if (graphicsTestRequested && !options.HasFrameLimit)
         {
             options.HasFrameLimit = true;
             options.FrameLimit = 180;
@@ -227,6 +238,10 @@ namespace Jevaing::Internal
 
         RendererConfig rendererConfig;
         rendererConfig.Backend = selectedBackend;
+        rendererConfig.TestPattern =
+            options.PenguinGraphicsTest
+                ? RendererTestPattern::Penguin
+                : RendererTestPattern::Triangle;
 
         std::unique_ptr<Renderer> renderer = Renderer::Create(
             rendererConfig,
@@ -247,7 +262,11 @@ namespace Jevaing::Internal
             "]"
         );
 
-        if (options.GraphicsTest)
+        if (options.PenguinGraphicsTest)
+        {
+            Logger::Info("ATLAS penguin graphics test enabled. 🐧");
+        }
+        else if (options.GraphicsTest)
         {
             Logger::Info("ATLAS graphics test enabled: colored triangle pipeline smoke test.");
         }
@@ -277,7 +296,7 @@ namespace Jevaing::Internal
 
             renderer->BeginFrame();
 
-            // ATLAS 0.0.5: DirectX now executes a minimal shader + vertex-buffer pipeline.
+            // ATLAS 0.0.5: DirectX executes small built-in graphics tests.
 
             renderer->EndFrame();
             ++frameCount;
@@ -298,7 +317,11 @@ namespace Jevaing::Internal
             }
         }
 
-        if (options.GraphicsTest)
+        if (options.PenguinGraphicsTest)
+        {
+            Logger::Info("[PASS] ATLAS penguin graphics test completed. 🐧");
+        }
+        else if (options.GraphicsTest)
         {
             Logger::Info("[PASS] ATLAS graphics pipeline smoke test completed.");
         }
