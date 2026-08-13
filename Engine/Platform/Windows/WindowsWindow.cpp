@@ -34,12 +34,12 @@ namespace Jevaing::Platform
     {
         WNDCLASSW windowClass = {};
 
+        windowClass.style = CS_HREDRAW | CS_VREDRAW;
         windowClass.lpfnWndProc = WindowProc;
         windowClass.hInstance = m_instance;
         windowClass.lpszClassName = m_className;
-
-        windowClass.hCursor =
-            LoadCursorW(nullptr, IDC_ARROW);
+        windowClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+        windowClass.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
 
         if (!RegisterClassW(&windowClass))
         {
@@ -71,18 +71,13 @@ namespace Jevaing::Platform
             0,
             m_className,
             title,
-
             WS_OVERLAPPEDWINDOW,
-
             CW_USEDEFAULT,
             CW_USEDEFAULT,
-
             windowWidth,
             windowHeight,
-
             nullptr,
             nullptr,
-
             m_instance,
             nullptr
         );
@@ -141,6 +136,17 @@ namespace Jevaing::Platform
     {
         switch (message)
         {
+            case WM_KEYDOWN:
+            {
+                if (wParam == VK_ESCAPE)
+                {
+                    DestroyWindow(hwnd);
+                    return 0;
+                }
+
+                break;
+            }
+
             case WM_CLOSE:
             {
                 DestroyWindow(hwnd);
