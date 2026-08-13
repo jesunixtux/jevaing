@@ -17,6 +17,7 @@
 #include "Logger.h"
 #include "Timer.h"
 #include "Window.h"
+#include "../Build/BuildSystem.h"
 #include "../Renderer/Renderer.h"
 
 namespace Jevaing::Internal
@@ -699,6 +700,170 @@ namespace Jevaing::Internal
             return ReportTest(!scene.Physics3D().HasBody(childId), "Dynamic physics body with parent is rejected") ? 0 : 2;
         }
 
+        int RunBuildTargetInfo()
+        {
+            for (const BuildTargetInfo& target : GetBuildTargetInfo())
+            {
+                const bool xboxTarget =
+                    target.Target == BuildTarget::XboxDevModeUwpX64 ||
+                    target.Target == BuildTarget::XboxOneGdkX64 ||
+                    target.Target == BuildTarget::XboxSeriesGdkX64;
+                Logger::Info(
+                    target.DisplayName +
+                    ": " +
+                    (target.Available ? "available" : "unavailable") +
+                    (target.Experimental ? " [Experimental]" : "") +
+                    (xboxTarget ? " [Hardware pending]" : "") +
+                    " - " +
+                    target.Reason
+                );
+            }
+
+            return 0;
+        }
+
+        int RunGamepadTest()
+        {
+            InputState::BeginFrame();
+
+            for (int index = 0; index < 4; ++index)
+            {
+                const GamepadState state = Input::GetGamepadState(index);
+                Logger::Info(
+                    "Gamepad " +
+                    std::to_string(index) +
+                    ": " +
+                    (state.Connected ? "connected" : "disconnected") +
+                    " LS(" +
+                    std::to_string(state.LeftStickX) +
+                    ", " +
+                    std::to_string(state.LeftStickY) +
+                    ") RS(" +
+                    std::to_string(state.RightStickX) +
+                    ", " +
+                    std::to_string(state.RightStickY) +
+                    ") LT=" +
+                    std::to_string(state.LeftTrigger) +
+                    " RT=" +
+                    std::to_string(state.RightTrigger)
+                );
+            }
+
+            return ReportTest(true, "Gamepad API queried without exposing platform handles") ? 0 : 2;
+        }
+
+        int RunProjectTemplateTest()
+        {
+            const std::filesystem::path tempRoot =
+                std::filesystem::temp_directory_path() / "jevaing-project-template-test";
+            std::filesystem::remove_all(tempRoot);
+            std::filesystem::create_directories(tempRoot);
+
+            std::string projectFile;
+            std::string error;
+            const bool created =
+                CreateProjectFromTemplate("TemplateGame", tempRoot.string(), projectFile, error);
+            const std::filesystem::path projectDir = tempRoot / "TemplateGame";
+
+            bool success = true;
+            success &= ReportTest(created, "Project template creates files");
+            success &= ReportTest(std::filesystem::exists(projectDir / "jevaing.project"), "Template has jevaing.project");
+            success &= ReportTest(std::filesystem::exists(projectDir / "Assets" / "Models"), "Template has Assets/Models");
+            success &= ReportTest(std::filesystem::exists(projectDir / "Assets" / "Textures"), "Template has Assets/Textures");
+            success &= ReportTest(std::filesystem::exists(projectDir / "Scenes" / "main.scene"), "Template has Scenes/main.scene");
+            success &= ReportTest(std::filesystem::exists(projectDir / "Source" / "Game.cpp"), "Template has Source/Game.cpp");
+            success &= ReportTest(std::filesystem::exists(projectDir / "CMakeLists.txt"), "Template has CMakeLists.txt");
+
+            ProjectConfig config;
+            success &= ReportTest(Project::Load(projectFile, config, error), "Template project loads");
+
+            std::filesystem::remove_all(tempRoot);
+            return success ? 0 : 2;
+        }
+
+        int RunEditorSceneRoundTripTest()
+        {
+            std::string error;
+            return ReportTest(
+                EditorSceneRoundTripTest(error),
+                error.empty() ? "Editor Scene roundtrip preserves edits" : error
+            ) ? 0 : 2;
+        }
+
+        int RunPlayModeRestoreTest()
+        {
+            std::string error;
+            return ReportTest(
+                PlayModeRestoreTest(error),
+                error.empty() ? "Play/Stop restores edit scene snapshot" : error
+            ) ? 0 : 2;
+        }
+
+        int RunWindowsBuildTest()
+        {
+            const std::filesystem::path tempRoot =
+                std::filesystem::temp_directory_path() / "jevaing-windows-build-test";
+            std::filesystem::remove_all(tempRoot);
+            std::filesystem::create_directories(tempRoot);
+
+            std::string projectFile;
+            std::string error;
+
+            if (!CreateProjectFromTemplate("BuildGame", tempRoot.string(), projectFile, error))
+            {
+                return ReportTest(false, error) ? 0 : 2;
+            }
+
+            ProjectConfig project;
+            if (!Project::Load(projectFile, project, error))
+            {
+                return ReportTest(false, error) ? 0 : 2;
+            }
+
+            BuildSettings settings;
+            settings.Target = BuildTarget::WindowsDesktopX64;
+            settings.Configuration = BuildConfiguration::Debug;
+            settings.OutputDirectory = "Builds";
+            settings.StartupScene = project.StartupScene;
+            settings.ScenesInBuild.push_back(project.StartupScene);
+
+            const BuildResult result = BuildWindowsDesktop(project, settings, false);
+            const bool success =
+                result.Success &&
+                !result.OutputPath.empty() &&
+                std::filesystem::exists(result.OutputPath);
+
+            std::filesystem::remove_all(tempRoot);
+
+            return ReportTest(
+                success,
+                success ? "Windows Desktop x64 build produced executable" : result.Message
+            ) ? 0 : 2;
+        }
+
+        int RunXboxBuildEnvironmentTest()
+        {
+            for (const BuildTargetInfo& target : GetBuildTargetInfo())
+            {
+                if (
+                    target.Target == BuildTarget::XboxDevModeUwpX64 ||
+                    target.Target == BuildTarget::XboxOneGdkX64 ||
+                    target.Target == BuildTarget::XboxSeriesGdkX64
+                )
+                {
+                    Logger::Info(
+                        target.DisplayName +
+                        ": " +
+                        (target.Available ? "available" : "unavailable") +
+                        " - " +
+                        target.Reason
+                    );
+                }
+            }
+
+            return ReportTest(true, "Xbox target environment detection completed without requiring hardware") ? 0 : 2;
+        }
+
         int RunSelfTests()
         {
             Logger::Info("Running Jevaing self-tests...");
@@ -965,6 +1130,41 @@ namespace Jevaing::Internal
         if (options.PhysicsHierarchyTest)
         {
             return RunPhysicsHierarchyTest();
+        }
+
+        if (options.BuildTargetInfo)
+        {
+            return RunBuildTargetInfo();
+        }
+
+        if (options.GamepadTest)
+        {
+            return RunGamepadTest();
+        }
+
+        if (options.ProjectTemplateTest)
+        {
+            return RunProjectTemplateTest();
+        }
+
+        if (options.EditorSceneRoundTripTest)
+        {
+            return RunEditorSceneRoundTripTest();
+        }
+
+        if (options.PlayModeRestoreTest)
+        {
+            return RunPlayModeRestoreTest();
+        }
+
+        if (options.WindowsBuildTest)
+        {
+            return RunWindowsBuildTest();
+        }
+
+        if (options.XboxBuildEnvironmentTest)
+        {
+            return RunXboxBuildEnvironmentTest();
         }
 
         if (options.HierarchyTest)

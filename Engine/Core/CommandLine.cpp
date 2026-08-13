@@ -195,6 +195,34 @@ namespace Jevaing::Internal
             {
                 options.PhysicsHierarchyTest = true;
             }
+            else if (argument == "--build-target-info")
+            {
+                options.BuildTargetInfo = true;
+            }
+            else if (argument == "--gamepad-test")
+            {
+                options.GamepadTest = true;
+            }
+            else if (argument == "--project-template-test")
+            {
+                options.ProjectTemplateTest = true;
+            }
+            else if (argument == "--editor-scene-roundtrip-test")
+            {
+                options.EditorSceneRoundTripTest = true;
+            }
+            else if (argument == "--playmode-restore-test")
+            {
+                options.PlayModeRestoreTest = true;
+            }
+            else if (argument == "--windows-build-test")
+            {
+                options.WindowsBuildTest = true;
+            }
+            else if (argument == "--xbox-build-environment-test")
+            {
+                options.XboxBuildEnvironmentTest = true;
+            }
             else if (argument == "--runtime-test")
             {
                 options.RuntimeTest = true;
@@ -308,6 +336,13 @@ namespace Jevaing::Internal
             << "  --physics-scene-serialization-test Run physics Scene save/load validation.\n"
             << "  --physics-destroy-test     Validate physics body cleanup on DestroyEntity.\n"
             << "  --physics-hierarchy-test   Validate dynamic-parent rejection policy.\n"
+            << "  --build-target-info        Show platform/build target availability.\n"
+            << "  --gamepad-test             Print neutral gamepad state once.\n"
+            << "  --project-template-test    Create and validate a temporary project template.\n"
+            << "  --editor-scene-roundtrip-test Validate editor Scene save/load behavior.\n"
+            << "  --playmode-restore-test    Validate Play/Stop restores edit transforms.\n"
+            << "  --windows-build-test       Build a temporary project if CMake/toolchain is available.\n"
+            << "  --xbox-build-environment-test Report Xbox SDK/GDK prerequisites only.\n"
             << "  --runtime-test             Run client callbacks for a fixed smoke test.\n"
             << "  --renderer <backend>       Select: directx, null, vulkan, metal.\n"
             << "  --frames <count>           Exit automatically after N frames.\n\n"

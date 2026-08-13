@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 project(
     Jevaing
-    VERSION 0.0.10
+    VERSION 0.0.11
     LANGUAGES C CXX
 )
 
@@ -11,6 +11,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(JEVAING_BUILD_SANDBOX "Build the Jevaing Sandbox executable." ON)
+option(JEVAING_BUILD_EDITOR "Build the Jevaing first-party editor." ON)
+option(JEVAING_BUILD_XBOX_SMOKE_TEST "Build the experimental Xbox smoke test sample." ON)
 option(JEVAING_ENABLE_PHYSICS_2D "Build Jevaing 2D physics support." ON)
 option(JEVAING_ENABLE_PHYSICS_3D "Build Jevaing 3D physics support." ON)
 
@@ -97,11 +99,41 @@ if(JEVAING_ENABLE_PHYSICS_3D)
     FetchContent_MakeAvailable(JoltPhysics)
 endif()
 
+if(JEVAING_BUILD_EDITOR AND WIN32)
+    FetchContent_Declare(
+        imgui
+        GIT_REPOSITORY https://github.com/ocornut/imgui.git
+        GIT_TAG e0b59689461f03cbdc9aa394ea1512c1f0e6e246
+        GIT_SHALLOW TRUE
+    )
+
+    FetchContent_MakeAvailable(imgui)
+
+    add_library(imgui STATIC
+        ${imgui_SOURCE_DIR}/imgui.cpp
+        ${imgui_SOURCE_DIR}/imgui_demo.cpp
+        ${imgui_SOURCE_DIR}/imgui_draw.cpp
+        ${imgui_SOURCE_DIR}/imgui_tables.cpp
+        ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+        ${imgui_SOURCE_DIR}/misc/cpp/imgui_stdlib.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_dx11.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_win32.cpp
+    )
+
+    target_include_directories(imgui PUBLIC
+        ${imgui_SOURCE_DIR}
+        ${imgui_SOURCE_DIR}/backends
+    )
+
+    target_link_libraries(imgui PUBLIC d3d11 dxgi)
+endif()
+
 # Public API
 add_subdirectory(Api)
 
 # Jevaing core
 add_library(JevaingEngine STATIC
+    Engine/Build/BuildSystem.cpp
     Engine/Core/AssetManager.cpp
     Engine/Core/Application.cpp
     Engine/Core/CommandLine.cpp
@@ -140,6 +172,7 @@ if(WIN32)
             d3d11
             dxgi
             d3dcompiler
+            xinput
     )
 endif()
 
@@ -166,6 +199,43 @@ target_link_libraries(JevaingEngine
 if(JEVAING_ENABLE_PHYSICS_2D AND TARGET box2d)
     target_compile_definitions(JevaingEngine PRIVATE JEVAING_HAS_BOX2D=1)
     target_link_libraries(JevaingEngine PRIVATE box2d)
+endif()
+
+if(JEVAING_BUILD_EDITOR AND WIN32)
+    add_executable(JevaingEditor
+        Editor/Application/EditorMain.cpp
+    )
+
+    target_link_libraries(JevaingEditor
+        PRIVATE
+            JevaingEngine
+            imgui
+            d3d11
+            dxgi
+    )
+
+    target_include_directories(JevaingEditor PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${imgui_SOURCE_DIR}
+        ${imgui_SOURCE_DIR}/backends
+    )
+
+    target_compile_definitions(JevaingEditor PRIVATE
+        UNICODE
+        _UNICODE
+    )
+
+    set_target_properties(JevaingEditor PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY_DEBUG
+            "${CMAKE_CURRENT_SOURCE_DIR}/bin/Debug"
+
+        RUNTIME_OUTPUT_DIRECTORY_RELEASE
+            "${CMAKE_CURRENT_SOURCE_DIR}/bin/Release"
+    )
+endif()
+
+if(JEVAING_BUILD_XBOX_SMOKE_TEST AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Samples/XboxSmokeTest/CMakeLists.txt")
+    add_subdirectory(Samples/XboxSmokeTest)
 endif()
 
 if(JEVAING_ENABLE_PHYSICS_3D AND TARGET Jolt)
@@ -199,6 +269,9 @@ if(MSVC)
     if(TARGET JevaingSandbox)
         target_compile_options(JevaingSandbox PRIVATE /W4)
     endif()
+    if(TARGET JevaingEditor)
+        target_compile_options(JevaingEditor PRIVATE /W4)
+    endif()
 else()
     target_compile_options(
         JevaingEngine PRIVATE
@@ -210,6 +283,15 @@ else()
     if(TARGET JevaingSandbox)
         target_compile_options(
             JevaingSandbox PRIVATE
+            -Wall
+            -Wextra
+            -Wpedantic
+        )
+    endif()
+
+    if(TARGET JevaingEditor)
+        target_compile_options(
+            JevaingEditor PRIVATE
             -Wall
             -Wextra
             -Wpedantic

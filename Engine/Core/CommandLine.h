@@ -46,6 +46,13 @@ namespace Jevaing::Internal
         bool PhysicsSceneSerializationTest = false;
         bool PhysicsDestroyTest = false;
         bool PhysicsHierarchyTest = false;
+        bool BuildTargetInfo = false;
+        bool GamepadTest = false;
+        bool ProjectTemplateTest = false;
+        bool EditorSceneRoundTripTest = false;
+        bool PlayModeRestoreTest = false;
+        bool WindowsBuildTest = false;
+        bool XboxBuildEnvironmentTest = false;
         bool RuntimeTest = false;
         bool HasFrameLimit = false;
         std::uint64_t FrameLimit = 0;

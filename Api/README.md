@@ -2,7 +2,7 @@
 
 The `Api/Include/Jevaing` directory contains the headers intended for client code.
 
-As of Jevaing 0.0.10 TBD the public surface includes:
+As of Jevaing 0.0.11 TBD the public surface includes:
 
 - `Assets.h` - backend-neutral asset data types and loading helpers for `Model`, `Mesh`, `Texture2D` and `Material`.
 - `Components.h` - small scene component value types.
@@ -11,7 +11,7 @@ As of Jevaing 0.0.10 TBD the public surface includes:
 - `Game.h` - client lifecycle and `GameConfig`.
 - `Graphics2D.h` - backend-neutral immediate 2D drawing interface including `DrawSprite`.
 - `Graphics3D.h` - backend-neutral immediate 3D drawing interface with `DrawCube`, `DrawMesh` and `SetDirectionalLight`.
-- `Input.h` - keyboard, mouse and small `InputMap` action helpers.
+- `Input.h` - keyboard, mouse, neutral gamepad and small `InputMap` action helpers.
 - `Physics.h` - backend-neutral physics enums, components, worlds, events and raycasts.
 - `Project.h` - first project config loader.
 - `Scene.h` - first scene/entity/component runtime.
@@ -19,7 +19,17 @@ As of Jevaing 0.0.10 TBD the public surface includes:
 
 Client code should prefer these headers instead of including files from `Engine/Core`, `Engine/Platform` or `Engine/Renderer` directly.
 
-Renderer, import and physics backends stay outside the public API. Client code should not include DirectX, Win32, Assimp, stb, Box2D or Jolt headers to use Jevaing assets and physics.
+Renderer, import, editor, platform input and physics backends stay outside the public API. Client code should not include Dear ImGui, DirectX, Win32, XInput, UWP, GDK, Assimp, stb, Box2D or Jolt headers to use Jevaing assets, input and physics.
+
+Gamepad clients use neutral values only:
+
+- `GamepadButton`
+- `GamepadState`
+- `Input::IsGamepadConnected`
+- `Input::IsGamepadButtonDown`
+- `Input::IsGamepadButtonPressed`
+- `Input::IsGamepadButtonReleased`
+- `Input::GetGamepadState`
 
 Physics clients use neutral values only:
 

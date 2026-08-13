@@ -1,6 +1,14 @@
 #include "Logger.h"
 
 #include <iostream>
+#include <mutex>
+#include <utility>
+
+namespace
+{
+    std::mutex SinkMutex;
+    Jevaing::Internal::Logger::Sink ActiveSink;
+}
 
 namespace Jevaing::Internal
 {
@@ -17,6 +25,12 @@ namespace Jevaing::Internal
     void Logger::Error(const std::string& message)
     {
         Write(LogLevel::Error, message);
+    }
+
+    void Logger::SetSink(Sink sink)
+    {
+        std::lock_guard<std::mutex> lock(SinkMutex);
+        ActiveSink = std::move(sink);
     }
 
     void Logger::Write(LogLevel level, const std::string& message)
@@ -42,5 +56,11 @@ namespace Jevaing::Internal
         }
 
         (*stream) << "[Jevaing][" << label << "] " << message << std::endl;
+
+        std::lock_guard<std::mutex> lock(SinkMutex);
+        if (ActiveSink)
+        {
+            ActiveSink(level, message);
+        }
     }
 }

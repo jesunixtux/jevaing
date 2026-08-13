@@ -32,6 +32,36 @@ namespace Jevaing
         Count
     };
 
+    enum class GamepadButton
+    {
+        A,
+        B,
+        X,
+        Y,
+        LeftShoulder,
+        RightShoulder,
+        View,
+        Menu,
+        DPadUp,
+        DPadDown,
+        DPadLeft,
+        DPadRight,
+        LeftStick,
+        RightStick,
+        Count
+    };
+
+    struct GamepadState
+    {
+        bool Connected = false;
+        float LeftStickX = 0.0f;
+        float LeftStickY = 0.0f;
+        float RightStickX = 0.0f;
+        float RightStickY = 0.0f;
+        float LeftTrigger = 0.0f;
+        float RightTrigger = 0.0f;
+    };
+
     namespace Input
     {
         bool IsKeyDown(Key key);
@@ -44,6 +74,12 @@ namespace Jevaing
         bool IsMouseButtonDown(MouseButton button);
         bool IsMouseButtonPressed(MouseButton button);
         bool IsMouseButtonReleased(MouseButton button);
+
+        bool IsGamepadConnected(int index);
+        bool IsGamepadButtonDown(int index, GamepadButton button);
+        bool IsGamepadButtonPressed(int index, GamepadButton button);
+        bool IsGamepadButtonReleased(int index, GamepadButton button);
+        GamepadState GetGamepadState(int index);
     }
 
     class InputMap

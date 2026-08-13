@@ -4,6 +4,8 @@ build-minimal3d/
 build-physics3d/
 build-physics2d/
 build-nophysics/
+build-runtime/
+build-xbox-smoke-uwp/
 out/
 
 Samples/Minimal3D/Assets/Models/gummybear.fbx
@@ -16,3 +18,4 @@ bin/Release/
 *.VC.db
 *.VC.opendb
 CMakePresets.json.user
+JevaingEditor.ini
