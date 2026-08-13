@@ -6,23 +6,21 @@
 #define NOMINMAX
 #include <Windows.h>
 
+#include "../../Core/Window.h"
+
 namespace Jevaing::Platform
 {
-    class WindowsWindow
+    class WindowsWindow final : public Internal::Window
     {
     public:
         WindowsWindow();
-        ~WindowsWindow();
+        ~WindowsWindow() override;
 
-        bool Create(
-            const wchar_t* title,
-            int width,
-            int height
-        );
+        void Show() override;
+        bool ProcessEvents() override;
 
-        bool ProcessMessages();
-
-        void Show();
+    protected:
+        bool Initialize(const Internal::WindowConfig& config) override;
 
     private:
         static LRESULT CALLBACK WindowProc(
@@ -36,6 +34,7 @@ namespace Jevaing::Platform
         HINSTANCE m_instance = nullptr;
         HWND m_window = nullptr;
         const wchar_t* m_className = L"JevaingWindowClass";
+        bool m_classRegistered = false;
     };
 }
 

@@ -4,31 +4,36 @@ Jevaing is an experimental open-source graphics and game engine written in C++.
 
 The project is currently in a very early stage. The goal is to build the engine step by step, keeping the core small, understandable, modular, and independent from any store, account system, online service, or vendor-specific platform.
 
-> **Current version:** `0.0.1`
+> **Current version:** `0.0.2`
 >
-> **Codename:** `RENACO`
+> **Codename:** `MARIA`
 >
 > **Status:** early prototype — not production ready.
 
 ## What works today
 
-Jevaing 0.0.1 RENACO currently provides a minimal working engine bootstrap on Windows:
+Jevaing 0.0.2 MARIA currently provides a small but functional engine foundation on Windows:
 
 - C++17 core.
 - CMake build system.
 - Minimal public Jevaing API.
-- Native Win32 window creation.
+- Generic engine-facing window abstraction.
+- Platform window factory.
+- Native Win32 window implementation hidden behind the generic window API.
+- UTF-8 engine window titles converted internally to Win32 UTF-16.
 - 1280x720 test window.
 - Native Windows message loop.
 - Window move, resize, minimize and maximize support through Win32.
 - Exit through the window close button.
 - Exit with the `ESC` key.
 - Dark native window background.
-- Basic startup and shutdown logging.
+- Basic logger with info, warning and error levels.
+- Engine timer based on `std::chrono::steady_clock`.
+- Per-loop delta time measurement.
 - Debug and Release output directories.
-- Clean separation between the Sandbox application and the internal engine code.
+- Clean separation between the Sandbox, engine Core and platform-specific code.
 
-There is **no graphics renderer yet**. DirectX, Vulkan and Metal are planned backends and are not implemented in RENACO.
+There is **no graphics renderer yet**. DirectX, Vulkan and Metal are planned backends and are not implemented in MARIA.
 
 Linux and macOS support are also planned but are not functional yet.
 
@@ -48,7 +53,7 @@ The long-term idea is that a game should not need to know whether Jevaing is run
 
 ## Current architecture
 
-The current prototype follows this basic flow:
+MARIA introduces the first platform abstraction into the Core:
 
 ```text
 Sandbox/main.cpp
@@ -60,13 +65,21 @@ Sandbox/main.cpp
     Application
         |
         v
+      Window
+        |
+        v
+  Platform factory
+        |
+        v
    WindowsWindow
         |
         v
       Win32
 ```
 
-The public Sandbox currently only needs the public API:
+`Application.cpp` no longer includes or constructs `WindowsWindow` directly. The Core asks `Window::Create(...)` for a platform window and the factory selects the implementation available for the current target.
+
+The public Sandbox still only needs the public API:
 
 ```cpp
 #include <Jevaing/Jevaing.h>
@@ -89,8 +102,6 @@ This API will change while Jevaing is below version 1.0.
 
 ## Repository structure
 
-The project is organized around a small number of responsibilities:
-
 ```text
 jevaing/
 ├── Api/
@@ -100,6 +111,12 @@ jevaing/
 │
 ├── Engine/
 │   ├── Core/
+│   │   ├── Application.*
+│   │   ├── Logger.*
+│   │   ├── Timer.*
+│   │   ├── Version.*
+│   │   └── Window.*
+│   │
 │   ├── Platform/
 │   │   ├── Windows/
 │   │   ├── Linux/       # planned
@@ -125,7 +142,7 @@ Some planned directories may not appear in Git until they contain tracked files.
 
 ## Dependencies
 
-### Required to build RENACO on Windows
+### Required to build MARIA on Windows
 
 - **CMake 3.20 or newer**.
 - A **C++17-compatible compiler**.
@@ -135,7 +152,7 @@ Some planned directories may not appear in Git until they contain tracked files.
 
 ### Windows system libraries currently used
 
-RENACO links only against libraries provided by Windows:
+MARIA links only against libraries provided by Windows:
 
 - `user32`
 - `gdi32`
@@ -165,7 +182,7 @@ Build the Debug configuration:
 cmake --build build --config Debug
 ```
 
-Run RENACO:
+Run MARIA:
 
 ```powershell
 .\bin\Debug\JevaingSandbox.exe
@@ -174,7 +191,7 @@ Run RENACO:
 A window titled:
 
 ```text
-Jevaing 0.0.1 - RENACO
+Jevaing 0.0.2 - MARIA
 ```
 
 should appear.
@@ -239,24 +256,15 @@ Game / Engine systems
 DirectX Vulkan Metal
 ```
 
-The renderer abstraction does not exist yet in RENACO. It will be introduced gradually instead of creating a large unused architecture upfront.
+The renderer abstraction does not exist yet in MARIA. It will be introduced gradually instead of creating a large unused architecture upfront.
 
 ## Platform integration philosophy
 
 Jevaing itself should not require a specific commercial platform.
 
-Future integrations may include things such as:
+Future integrations may include things such as achievements, cloud saves, multiplayer services, storefront APIs, authentication, and mod/workshop services.
 
-- achievements;
-- cloud saves;
-- multiplayer services;
-- storefront APIs;
-- authentication;
-- mod or workshop services.
-
-These should be optional integrations rather than requirements of the core engine.
-
-A project should eventually be able to use Steam, Epic, GOG, a console service, a custom backend, or no online platform at all without replacing the engine core.
+These should be optional integrations rather than requirements of the core engine. A project should eventually be able to use Steam, Epic, GOG, a console service, a custom backend, or no online platform at all without replacing the engine core.
 
 ## Roadmap
 
@@ -278,11 +286,23 @@ This roadmap is intentionally flexible. Items may move as the engine architectur
 - [x] Dark native background.
 - [x] Basic startup/shutdown logs.
 
+### 0.0.2 — MARIA
+
+- [x] Generic cross-platform window interface.
+- [x] Platform window factory.
+- [x] Remove direct Win32 dependency from `Application.cpp`.
+- [x] Generic window configuration with title, width and height.
+- [x] UTF-8 title handling at the Core boundary.
+- [x] Basic logging system with info, warning and error levels.
+- [x] Engine timer.
+- [x] Delta time measurement.
+- [x] Keep the existing Win32 behavior from RENACO.
+
 ### Core foundation
 
-- [ ] Generic cross-platform window abstraction.
-- [ ] Engine timer and delta time.
-- [ ] Logging system with info, warning and error levels.
+- [x] Generic cross-platform window abstraction.
+- [x] Engine timer and delta time.
+- [x] Logging system with info, warning and error levels.
 - [ ] Basic keyboard and mouse input API.
 - [ ] Basic game/application loop separation.
 - [ ] Automated tests for core systems.
@@ -336,7 +356,7 @@ Jevaing is currently pre-alpha and uses `0.x.x` versions.
 
 Until version `1.0`, the public API, file structure and internal architecture may change without backwards compatibility guarantees.
 
-Development versions may also use internal codenames such as `RENACO`.
+Development versions may also use internal codenames such as `RENACO` and `MARIA`.
 
 ## Contributing
 

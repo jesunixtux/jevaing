@@ -2,6 +2,51 @@
 
 #include "WindowsWindow.h"
 
+#include <string>
+
+namespace
+{
+    std::wstring Utf8ToWide(const std::string& text)
+    {
+        if (text.empty())
+        {
+            return {};
+        }
+
+        const int requiredSize = MultiByteToWideChar(
+            CP_UTF8,
+            MB_ERR_INVALID_CHARS,
+            text.data(),
+            static_cast<int>(text.size()),
+            nullptr,
+            0
+        );
+
+        if (requiredSize <= 0)
+        {
+            return {};
+        }
+
+        std::wstring result(static_cast<std::size_t>(requiredSize), L'\0');
+
+        const int convertedSize = MultiByteToWideChar(
+            CP_UTF8,
+            MB_ERR_INVALID_CHARS,
+            text.data(),
+            static_cast<int>(text.size()),
+            result.data(),
+            requiredSize
+        );
+
+        if (convertedSize != requiredSize)
+        {
+            return {};
+        }
+
+        return result;
+    }
+}
+
 namespace Jevaing::Platform
 {
     WindowsWindow::WindowsWindow()
@@ -17,23 +62,28 @@ namespace Jevaing::Platform
             m_window = nullptr;
         }
 
-        if (m_instance)
+        if (m_classRegistered && m_instance)
         {
-            UnregisterClassW(
-                m_className,
-                m_instance
-            );
+            UnregisterClassW(m_className, m_instance);
+            m_classRegistered = false;
         }
     }
 
-    bool WindowsWindow::Create(
-        const wchar_t* title,
-        int width,
-        int height
-    )
+    bool WindowsWindow::Initialize(const Internal::WindowConfig& config)
     {
-        WNDCLASSW windowClass = {};
+        if (!m_instance || config.Width <= 0 || config.Height <= 0)
+        {
+            return false;
+        }
 
+        const std::wstring title = Utf8ToWide(config.Title);
+
+        if (!config.Title.empty() && title.empty())
+        {
+            return false;
+        }
+
+        WNDCLASSW windowClass = {};
         windowClass.style = CS_HREDRAW | CS_VREDRAW;
         windowClass.lpfnWndProc = WindowProc;
         windowClass.hInstance = m_instance;
@@ -43,34 +93,36 @@ namespace Jevaing::Platform
 
         if (!RegisterClassW(&windowClass))
         {
-            return false;
+            if (GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
+            {
+                return false;
+            }
+        }
+        else
+        {
+            m_classRegistered = true;
         }
 
         RECT windowRect = {
             0,
             0,
-            width,
-            height
+            config.Width,
+            config.Height
         };
 
-        AdjustWindowRect(
-            &windowRect,
-            WS_OVERLAPPEDWINDOW,
-            FALSE
-        );
+        if (!AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE))
+        {
+            return false;
+        }
 
-        const int windowWidth =
-            windowRect.right -
-            windowRect.left;
-
-        const int windowHeight =
-            windowRect.bottom -
-            windowRect.top;
+        const int windowWidth = windowRect.right - windowRect.left;
+        const int windowHeight = windowRect.bottom - windowRect.top;
+        const wchar_t* windowTitle = title.empty() ? L"Jevaing" : title.c_str();
 
         m_window = CreateWindowExW(
             0,
             m_className,
-            title,
+            windowTitle,
             WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -82,37 +134,20 @@ namespace Jevaing::Platform
             nullptr
         );
 
-        if (!m_window)
-        {
-            return false;
-        }
-
-        return true;
+        return m_window != nullptr;
     }
 
     void WindowsWindow::Show()
     {
-        ShowWindow(
-            m_window,
-            SW_SHOW
-        );
-
+        ShowWindow(m_window, SW_SHOW);
         UpdateWindow(m_window);
     }
 
-    bool WindowsWindow::ProcessMessages()
+    bool WindowsWindow::ProcessEvents()
     {
         MSG message = {};
 
-        while (
-            PeekMessageW(
-                &message,
-                nullptr,
-                0,
-                0,
-                PM_REMOVE
-            )
-        )
+        while (PeekMessageW(&message, nullptr, 0, 0, PM_REMOVE))
         {
             if (message.message == WM_QUIT)
             {
@@ -160,12 +195,7 @@ namespace Jevaing::Platform
             }
         }
 
-        return DefWindowProcW(
-            hwnd,
-            message,
-            wParam,
-            lParam
-        );
+        return DefWindowProcW(hwnd, message, wParam, lParam);
     }
 }
 

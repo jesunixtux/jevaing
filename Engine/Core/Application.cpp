@@ -1,12 +1,13 @@
-#include <iostream>
+#include <chrono>
+#include <string>
+#include <thread>
 
 #include <Jevaing/Jevaing.h>
 
 #include "Application.h"
-
-#ifdef _WIN32
-#include "../Platform/Windows/WindowsWindow.h"
-#endif
+#include "Logger.h"
+#include "Timer.h"
+#include "Window.h"
 
 namespace Jevaing::Internal
 {
@@ -15,94 +16,51 @@ namespace Jevaing::Internal
         constexpr int WindowWidth = 1280;
         constexpr int WindowHeight = 720;
 
-        std::cout
-            << "=============================="
-            << std::endl;
+        const std::string engineName =
+            std::string("Jevaing ") + Jevaing::GetVersion() + " - " + Jevaing::GetCodename();
 
-        std::cout
-            << "       Jevaing Engine"
-            << std::endl;
+        Logger::Info(engineName);
+        Logger::Info("Initializing engine...");
 
-        std::cout
-            << "=============================="
-            << std::endl;
+        WindowConfig windowConfig;
+        windowConfig.Title = engineName;
+        windowConfig.Width = WindowWidth;
+        windowConfig.Height = WindowHeight;
 
-        std::cout
-            << "Version:  "
-            << Jevaing::GetVersion()
-            << std::endl;
+        std::unique_ptr<Window> window = Window::Create(windowConfig);
 
-        std::cout
-            << "Codename: "
-            << Jevaing::GetCodename()
-            << std::endl;
-
-        std::cout << std::endl;
-
-        std::cout
-            << "[Jevaing] Initializing engine..."
-            << std::endl;
-
-#ifdef _WIN32
-
-        std::cout
-            << "[Jevaing] Platform: Windows (Win32)"
-            << std::endl;
-
-        Platform::WindowsWindow window;
-
-        if (!window.Create(
-            L"Jevaing 0.0.1 - RENACO",
-            WindowWidth,
-            WindowHeight
-        ))
+        if (!window)
         {
-            std::cerr
-                << "[Jevaing] Failed to create Windows window."
-                << std::endl;
-
+            Logger::Error("Failed to create a platform window.");
             return 1;
         }
 
-        window.Show();
+        window->Show();
 
-        std::cout
-            << "[Jevaing] Window created: "
-            << WindowWidth
-            << "x"
-            << WindowHeight
-            << std::endl;
+        Logger::Info(
+            "Window created: " +
+            std::to_string(WindowWidth) +
+            "x" +
+            std::to_string(WindowHeight)
+        );
+        Logger::Info("Press ESC or close the window to exit.");
 
-        std::cout
-            << "[Jevaing] Press ESC or close the window to exit."
-            << std::endl;
+        Timer timer;
+        Logger::Info("Timer initialized.");
+        Logger::Info("Engine initialized.");
 
-        std::cout
-            << "[Jevaing] Engine initialized."
-            << std::endl;
-
-        while (window.ProcessMessages())
+        while (window->ProcessEvents())
         {
-            // RENACO 0.0.1: basic native event loop.
+            const double deltaTime = timer.Tick();
+            (void)deltaTime;
+
+            // MARIA 0.0.2: basic engine loop foundation.
+            // Future systems will consume deltaTime here.
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
 
-#else
-
-        std::cerr
-            << "[Jevaing] Platform not implemented."
-            << std::endl;
-
-        return 1;
-
-#endif
-
-        std::cout
-            << "[Jevaing] Shutting down..."
-            << std::endl;
-
-        std::cout
-            << "[Jevaing] Goodbye."
-            << std::endl;
+        Logger::Info("Shutting down...");
+        Logger::Info("Goodbye.");
 
         return 0;
     }
@@ -113,7 +71,6 @@ namespace Jevaing
     int Run()
     {
         Internal::Application application;
-
         return application.Run();
     }
 }
