@@ -2,17 +2,17 @@
 
 Jevaing is an experimental open-source graphics and game engine written in C++.
 
-The project is being built step by step, with a small and understandable core, platform-specific code kept behind abstractions, and no mandatory dependency on a store, account system, online service, or vendor platform.
+The project is built step by step with a small, understandable core, platform-specific code behind abstractions, and no mandatory dependency on a store, account system, online service, or vendor platform.
 
-> **Current version:** `0.0.3`
+> **Current version:** `0.0.4`
 >
-> **Codename:** `ARPA`
+> **Codename:** `ARPA+`
 >
 > **Status:** early prototype — not production ready.
 
 ## What works today
 
-Jevaing 0.0.3 ARPA currently provides a small but functional engine foundation on Windows:
+Jevaing 0.0.4 ARPA+ currently provides a small but functional engine foundation on Windows:
 
 - C++17 core.
 - CMake build system.
@@ -20,92 +20,56 @@ Jevaing 0.0.3 ARPA currently provides a small but functional engine foundation o
 - Generic engine-facing window abstraction.
 - Platform window factory.
 - Native Win32 window implementation hidden behind the generic window API.
-- UTF-8 engine window titles converted internally to Win32 UTF-16.
-- Native Windows message loop.
+- UTF-8 window titles converted internally to Win32 UTF-16.
+- Native Windows event loop.
 - Window move, resize, minimize and maximize support.
-- Exit through the window close button or `ESC`.
-- Dark native window background.
+- Exit through the close button or `ESC`.
 - Logger with info, warning and error levels.
 - Engine timer based on `std::chrono::steady_clock`.
-- Per-loop delta time measurement.
+- Delta-time measurement.
 - Generic renderer interface.
-- Renderer backend selection enum/configuration.
 - Renderer-independent `BeginFrame()` / `EndFrame()` boundaries.
-- A functional **Null Renderer** used to validate the renderer architecture without pretending a GPU backend already exists.
-- Debug and Release output directories.
-- Separation between Sandbox, Core, Platform and Renderer code.
+- Null Renderer for architecture and fallback testing.
+- **DirectX 11 renderer on Windows.**
+- DirectX 11 device, swap chain and render-target creation.
+- A real GPU-cleared frame presented to the Win32 window.
+- Command-line test interface.
+- Headless core self-tests that do not open a window.
+- Automatic frame-limited runs for repeatable renderer tests.
 
-ARPA still has **no real GPU renderer**. DirectX, Vulkan and Metal are planned backends but are not implemented yet.
+Vulkan and Metal are represented in the renderer API but are **not implemented yet**.
 
-The current Null Renderer intentionally draws nothing. The black window background still comes from the Win32 platform layer.
+Linux and macOS platform implementations are also planned but are not functional yet.
 
-Linux and macOS support are planned but are not functional yet.
+## 0.0.4 ARPA+ goal
 
-## Project goals
+ARPA introduced the renderer abstraction. ARPA+ makes that abstraction reach a real GPU backend for the first time.
 
-Jevaing is designed around a few simple rules:
-
-- Keep the Core independent from operating-system-specific code whenever possible.
-- Keep rendering backends separate from the rest of the engine.
-- Allow different graphics APIs depending on the target platform.
-- Avoid mandatory accounts, stores, launchers or online services.
-- Allow external platform integrations through optional layers or plugins in the future.
-- Keep the engine usable for both open-source and commercial projects under the MIT License.
-- Add systems only when they are needed and can be tested.
-
-The long-term goal is that game and engine systems should not need to know whether Jevaing is running through Win32, Linux or macOS, or whether rendering is provided by DirectX, Vulkan or Metal.
-
-## Current architecture
-
-ARPA adds the first renderer abstraction on top of the platform foundation introduced in MARIA:
+The normal Windows path is now:
 
 ```text
-Sandbox/main.cpp
-        |
-        v
-   Jevaing::Run()
-        |
-        v
-    Application
-      /      \
-     v        v
-  Window    Renderer
-     |         |
-     v         v
-Platform    Renderer factory
- factory       |
-     |         v
-     v      Null Renderer
-WindowsWindow  |
-     |         +---- future: DirectX
-     v         +---- future: Vulkan
-   Win32       +---- future: Metal
+Sandbox
+   |
+   v
+Jevaing::Run(argc, argv)
+   |
+   v
+Application
+  /     \
+ v       v
+Window  Renderer
+ |        |
+ v        v
+Win32   DirectX 11
+          |
+          v
+     DXGI swap chain
+          |
+          v
+       GPU frame
 ```
 
-`Application.cpp` does not construct `WindowsWindow` directly and does not contain DirectX, Vulkan or Metal code.
-
-The Core asks `Window::Create(...)` for a platform window and `Renderer::Create(...)` for a renderer. ARPA currently selects the Null Renderer so the complete renderer lifecycle can be exercised before a real graphics backend is introduced.
-
-The public Sandbox still only needs the public API:
-
-```cpp
-#include <Jevaing/Jevaing.h>
-
-int main()
-{
-    return Jevaing::Run();
-}
-```
-
-The current public API is intentionally tiny:
-
-```cpp
-Jevaing::GetVersion();
-Jevaing::GetCodename();
-Jevaing::Run();
-```
-
-This API may change while Jevaing is below version 1.0.
+The renderer still does not draw meshes, sprites or a triangle. ARPA+ intentionally stops at a reliable DirectX device/swap-chain/render-target foundation.
 
 ## Repository structure
 
@@ -119,6 +83,7 @@ jevaing/
 ├── Engine/
 │   ├── Core/
 │   │   ├── Application.*
+│   │   ├── CommandLine.*
 │   │   ├── Logger.*
 │   │   ├── Timer.*
 │   │   ├── Version.*
@@ -131,45 +96,39 @@ jevaing/
 │   │
 │   └── Renderer/
 │       ├── Renderer.*
-│       ├── DirectX/     # planned
+│       ├── DirectX/
+│       │   └── D3D11Renderer.*
 │       ├── Vulkan/      # planned
 │       └── Metal/       # planned
 │
-├── Library/             # future external dependencies
-├── Sandbox/             # small program used to validate the engine
+├── Library/
+├── Sandbox/
 ├── bin/
-│   ├── Debug/
-│   └── Release/
-│
 ├── CMakeLists.txt
 ├── LICENSE
 └── README.md
 ```
 
-Some planned directories may not appear in Git until they contain tracked files.
-
 ## Dependencies
 
-### Required to build ARPA on Windows
+### Required to build ARPA+ on Windows
 
 - **CMake 3.20 or newer**.
 - A **C++17-compatible compiler**.
-- **Windows SDK** with Win32 development headers and libraries.
-- A supported Windows C++ toolchain such as **MSVC / Visual Studio Build Tools**.
-- Git is recommended for cloning and updating the repository.
+- **Windows SDK** with Win32 and Direct3D 11 headers/libraries.
+- A Windows C++ toolchain such as **MSVC / Visual Studio Build Tools**.
+- Git is recommended.
 
-### Windows system libraries currently used
+### Windows libraries currently linked
 
-ARPA currently links only against libraries provided by Windows:
+Jevaing currently uses Windows-provided libraries only:
 
 - `user32`
 - `gdi32`
+- `d3d11`
+- `dxgi`
 
-No third-party runtime library is currently required.
-
-Jevaing does **not** currently depend on SDL, GLFW, Qt, DirectXTK or another game engine/framework.
-
-No DirectX, Vulkan or Metal SDK integration is required yet because ARPA uses the Null Renderer.
+No SDL, GLFW, Qt, DirectXTK, third-party game engine or third-party runtime is required.
 
 ## Building on Windows
 
@@ -180,254 +139,285 @@ git clone https://github.com/jesunixtux/jevaing.git
 cd jevaing
 ```
 
-Generate the build files:
+Generate build files:
 
 ```powershell
 cmake -S . -B build
 ```
 
-Build the Debug configuration:
+Build Debug:
 
 ```powershell
 cmake --build build --config Debug
 ```
 
-Run ARPA:
+Run normally:
 
 ```powershell
 .\bin\Debug\JevaingSandbox.exe
 ```
 
-A window titled:
+The window title should be:
 
 ```text
-Jevaing 0.0.3 - ARPA
+Jevaing 0.0.4 - ARPA+
 ```
 
-should appear.
-
-The console should include a line similar to:
+The console should include lines similar to:
 
 ```text
-[Jevaing][INFO] Renderer initialized: Null Renderer [None]
+[Jevaing][INFO] DirectX 11 device and swap chain initialized.
+[Jevaing][INFO] Renderer initialized: DirectX 11 Renderer [DirectX]
+[Jevaing][INFO] Engine initialized.
 ```
 
-That line confirms that `Application -> Renderer -> Null Renderer` is working.
+The window should be cleared by DirectX every frame. This is the first version where the visible client area is produced by a real GPU renderer instead of only the Win32 background brush.
 
-Close the window with the title-bar close button or press `ESC`.
+## Command-line testing
 
-### Release build
+ARPA+ adds command-line commands so engine behavior can be checked from PowerShell, scripts and eventually CI.
+
+### Show available commands
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --help
+```
+
+### Print the current version
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --version
+```
+
+Expected:
+
+```text
+Jevaing 0.0.4 - ARPA+
+```
+
+### Run core self-tests
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --self-test
+```
+
+This does **not** open a window.
+
+It currently checks:
+
+- version availability;
+- codename availability;
+- positive timer delta time;
+- renderer-name parsing;
+- Null Renderer availability;
+- default renderer availability.
+
+A healthy run ends with:
+
+```text
+[Jevaing][INFO] Self-tests completed successfully.
+```
+
+The process returns exit code `0` when all tests pass.
+
+### Inspect renderer availability
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --renderer-info
+```
+
+On the current Windows build, the expected state is approximately:
+
+```text
+None: available
+DirectX: available
+Vulkan: not available
+Metal: not available
+Default renderer: DirectX
+```
+
+### Force DirectX 11
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --renderer directx
+```
+
+Aliases accepted for this backend include `dx11` and `d3d11`.
+
+### Force the Null Renderer
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --renderer null
+```
+
+This keeps the engine loop and window alive but performs no GPU rendering. It is useful for comparing platform behavior against the DirectX backend.
+
+### Run a fixed number of frames
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --renderer directx --frames 300
+```
+
+Jevaing will open the window, render exactly 300 loop frames, shut down and return control to PowerShell automatically.
+
+This is useful for smoke tests because it does not require manually pressing `ESC`.
+
+The Null Renderer can be tested the same way:
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --renderer null --frames 60
+```
+
+### Test an unavailable backend
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --renderer vulkan
+```
+
+ARPA+ should fail explicitly and return a non-zero exit code instead of silently falling back to another backend.
+
+You can inspect the last process exit code in PowerShell with:
+
+```powershell
+$LASTEXITCODE
+```
+
+## Release build
 
 ```powershell
 cmake --build build --config Release
 ```
 
-The executable will be placed in:
+The executable is placed in:
 
 ```text
 bin/Release/
 ```
 
-## Cleaning generated files
+## Renderer backends
 
-Generated build files are intentionally kept out of source control.
+| Backend | Status | Notes |
+|---|---|---|
+| Null | Working | No GPU work; architecture/testing backend |
+| DirectX 11 | Working prototype | Windows device + swap chain + frame clear/present |
+| Vulkan | Planned | Not implemented |
+| Metal | Planned | Not implemented |
 
-To remove the local CMake build directory from PowerShell:
+The renderer-facing API is intended to stay independent of the backend:
 
-```powershell
-Remove-Item .\build -Recurse -Force
+```text
+Application / engine systems
+            |
+            v
+         Renderer
+      /      |      \
+     v       v       v
+ DirectX   Vulkan   Metal
 ```
-
-Regenerate it with:
-
-```powershell
-cmake -S . -B build
-```
-
-Visual Studio local metadata, CMake build output and compiled binaries are ignored through `.gitignore`.
 
 ## Platform plan
 
 | Platform | Architecture | Status | Intended graphics backend |
 |---|---|---|---|
-| Windows | x64 | Basic platform layer working | DirectX / Vulkan |
+| Windows | x64 | Prototype working | DirectX / Vulkan |
 | Windows | ARM64 | Planned | DirectX / Vulkan |
 | Linux | x64 | Planned | Vulkan |
 | Linux | ARM64 | Planned | Vulkan |
 | macOS | Apple Silicon / ARM64 | Planned | Metal |
 
-Support listed as **planned** is not available yet.
-
-## Rendering foundation
-
-ARPA introduces the common renderer-facing API.
-
-The current renderer lifecycle is intentionally small:
-
-```text
-Renderer::Create(...)
-        |
-        v
-    Initialize
-        |
-        v
-  BeginFrame()
-        |
-        v
-future update/render work
-        |
-        v
-   EndFrame()
-```
-
-The currently available backend is:
-
-```text
-RendererBackend::None
-        |
-        v
-   Null Renderer
-```
-
-The Null Renderer does not use the GPU. Its purpose is to prove that the engine loop can operate through a renderer-independent interface.
-
-The planned evolution is:
-
-```text
-Game / Engine systems
-        |
-        v
-    Renderer API
-    /    |     \
-   v     v      v
-DirectX Vulkan Metal
-```
-
-Backend requests for DirectX, Vulkan or Metal currently fail explicitly instead of silently pretending that those renderers exist.
-
-## Platform integration philosophy
-
-Jevaing itself should not require a specific commercial platform.
-
-Future integrations may include achievements, cloud saves, multiplayer services, storefront APIs, authentication, and mod/workshop services.
-
-These should be optional integrations rather than requirements of the Core. A project should eventually be able to use Steam, Epic, GOG, a console service, a custom backend, or no online platform at all without replacing the engine core.
-
 ## Roadmap
 
-This roadmap is intentionally flexible. Items may move as the engine architecture becomes clearer.
+The roadmap is intentionally flexible.
 
 ### 0.0.1 — RENACO
 
 - [x] Initial repository structure.
 - [x] MIT License.
 - [x] CMake project.
-- [x] C++17 core.
 - [x] Minimal public API.
-- [x] Sandbox executable.
 - [x] Native Win32 window.
-- [x] Native Windows event loop.
-- [x] Window resizing and standard window controls.
-- [x] Exit through the close button.
-- [x] Exit with `ESC`.
-- [x] Dark native background.
-- [x] Basic startup/shutdown logs.
+- [x] Windows event loop.
+- [x] Basic clean shutdown.
 
 ### 0.0.2 — MARIA
 
-- [x] Generic cross-platform window interface.
+- [x] Generic window abstraction.
 - [x] Platform window factory.
 - [x] Remove direct Win32 dependency from `Application.cpp`.
-- [x] Generic window configuration with title, width and height.
-- [x] UTF-8 title handling at the Core boundary.
-- [x] Basic logging system with info, warning and error levels.
-- [x] Engine timer.
-- [x] Delta time measurement.
-- [x] Keep the existing Win32 behavior from RENACO.
+- [x] Logger.
+- [x] Timer and delta time.
 
 ### 0.0.3 — ARPA
 
 - [x] Common renderer interface.
-- [x] Renderer backend enum and configuration.
+- [x] Renderer backend enum/configuration.
 - [x] Renderer factory.
-- [x] Null Renderer for renderer-independent testing.
-- [x] Renderer initialization integrated into `Application`.
-- [x] `BeginFrame()` / `EndFrame()` lifecycle integrated into the engine loop.
-- [x] Explicit failure for unimplemented GPU backends.
-- [x] Preserve the window, logger and timer behavior from MARIA.
+- [x] `BeginFrame()` / `EndFrame()` lifecycle.
+- [x] Null Renderer.
+- [x] Explicit errors for unimplemented backends.
 
-### Core foundation
+### 0.0.4 — ARPA+
 
-- [x] Generic cross-platform window abstraction.
-- [x] Engine timer and delta time.
-- [x] Logging system with info, warning and error levels.
-- [x] Common renderer interface.
-- [ ] Basic keyboard and mouse input API.
-- [ ] Basic game/application loop separation.
-- [ ] Automated tests for core systems.
+- [x] DirectX 11 backend on Windows.
+- [x] Opaque native-window handle for renderer integration.
+- [x] D3D11 device creation.
+- [x] DXGI swap chain.
+- [x] Render-target view.
+- [x] GPU frame clear and present.
+- [x] Command-line argument forwarding.
+- [x] `--help`.
+- [x] `--version`.
+- [x] `--self-test`.
+- [x] `--renderer-info`.
+- [x] Renderer selection from CLI.
+- [x] Fixed-frame smoke-test mode.
 
-### Platform support
+### Next graphics work
 
-- [ ] Linux platform layer.
-- [ ] Linux x64 builds.
-- [ ] Linux ARM64 builds.
-- [ ] macOS platform layer.
-- [ ] macOS ARM64 builds.
-- [ ] Windows ARM64 build validation.
-
-### Graphics
-
-- [x] Common renderer interface.
-- [ ] DirectX backend.
-- [ ] Vulkan backend.
-- [ ] Metal backend.
+- [ ] Handle swap-chain resize properly.
+- [ ] DirectX shader compilation/loading.
+- [ ] Vertex buffer.
 - [ ] First GPU triangle.
-- [ ] GPU buffer management.
-- [ ] Shader loading and compilation workflow.
+- [ ] Common GPU-buffer abstraction.
 - [ ] Texture loading.
 - [ ] Basic 2D rendering.
-- [ ] Camera system.
-- [ ] Basic 3D rendering.
+- [ ] Vulkan backend.
+- [ ] Metal backend.
 
-### Engine systems
+### Core / engine work
 
+- [ ] Basic keyboard and mouse input API.
+- [ ] Cleaner application/game loop separation.
+- [ ] Automated CI tests.
 - [ ] Asset system.
 - [ ] Scene system.
 - [ ] Entity/component architecture.
 - [ ] Audio layer.
-- [ ] Physics integration or native physics layer.
-- [ ] Scripting layer.
-- [ ] Save/load foundation.
 - [ ] Plugin system.
-
-### Tools and developer experience
-
-- [ ] Example projects.
-- [ ] Better API documentation.
-- [ ] Build presets.
-- [ ] Continuous integration for supported platforms.
-- [ ] Debug tooling.
 - [ ] Editor prototype.
+
+## Design principles
+
+- Core code should avoid OS-specific types.
+- Platform code belongs in `Engine/Platform`.
+- Graphics-backend code belongs in `Engine/Renderer`.
+- Vendor/store integrations should be optional.
+- New architecture should be introduced only when there is something concrete to test with it.
+- Unsupported features should fail explicitly instead of pretending to work.
 
 ## Versioning
 
-Jevaing is currently pre-alpha and uses `0.x.x` versions.
+Jevaing is pre-alpha and uses `0.x.x` versions.
 
-Until version `1.0`, the public API, file structure and internal architecture may change without backwards compatibility guarantees.
+Until `1.0`, APIs, source layout and internal architecture may change without backwards-compatibility guarantees.
 
-Development versions currently include:
-
-- `0.0.1` — RENACO
-- `0.0.2` — MARIA
-- `0.0.3` — ARPA
+Development releases use internal codenames such as `RENACO`, `MARIA`, `ARPA` and `ARPA+`.
 
 ## Contributing
 
-Jevaing is intended to remain understandable and modular.
+Prefer small, independently testable changes. Keep platform-specific and renderer-specific code isolated behind their respective abstractions whenever possible.
 
-When contributing, prefer small changes that can be tested independently. Platform-specific code should stay inside the appropriate platform layer, and renderer-specific code should stay inside its renderer backend whenever possible.
-
-Avoid introducing mandatory vendor services or large dependencies into the Core without a clear reason.
+Avoid introducing mandatory vendor services or large dependencies into the core without a clear reason.
 
 ## License
 
