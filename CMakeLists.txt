@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 project(
     Jevaing
-    VERSION 0.0.2
+    VERSION 0.0.3
     LANGUAGES CXX
 )
 
@@ -20,6 +20,7 @@ add_library(JevaingEngine STATIC
     Engine/Core/Timer.cpp
     Engine/Core/Version.cpp
     Engine/Core/Window.cpp
+    Engine/Renderer/Renderer.cpp
 )
 
 if(WIN32)
