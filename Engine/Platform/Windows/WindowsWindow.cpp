@@ -39,7 +39,7 @@ namespace Jevaing::Platform
         windowClass.hInstance = m_instance;
         windowClass.lpszClassName = m_className;
         windowClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-        windowClass.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
+        windowClass.hbrBackground = reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
 
         if (!RegisterClassW(&windowClass))
         {
