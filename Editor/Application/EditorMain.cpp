@@ -907,11 +907,26 @@ namespace
                 ImGui::EndMenu();
             }
 
-            ImGui::BeginMenu("Edit"); ImGui::EndMenu();
-            ImGui::BeginMenu("GameObject"); ImGui::EndMenu();
-            ImGui::BeginMenu("Assets"); ImGui::EndMenu();
-            ImGui::BeginMenu("Build"); ImGui::EndMenu();
-            ImGui::BeginMenu("Help"); ImGui::EndMenu();
+            if (ImGui::BeginMenu("Edit"))
+            {
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("GameObject"))
+            {
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Assets"))
+            {
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Build"))
+            {
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Help"))
+            {
+                ImGui::EndMenu();
+            }
 
             ImGui::SetCursorPosX(ImGui::GetWindowWidth() * 0.5f - 45.0f);
             if (!g_editor.Playing)
