@@ -1,9 +1,15 @@
 #include "Renderer.h"
 
+#include <algorithm>
+#include <cctype>
 #include <string>
 
 #include "../Core/Logger.h"
 #include "../Core/Window.h"
+
+#ifdef _WIN32
+#include "DirectX/D3D11Renderer.h"
+#endif
 
 namespace Jevaing::Internal
 {
@@ -43,18 +49,86 @@ namespace Jevaing::Internal
         {
             case RendererBackend::None:
                 return "None";
-
             case RendererBackend::DirectX:
                 return "DirectX";
-
             case RendererBackend::Vulkan:
                 return "Vulkan";
-
             case RendererBackend::Metal:
                 return "Metal";
         }
 
         return "Unknown";
+    }
+
+    bool RendererBackendFromString(const std::string& name, RendererBackend& backend)
+    {
+        std::string normalized = name;
+        std::transform(
+            normalized.begin(),
+            normalized.end(),
+            normalized.begin(),
+            [](unsigned char character)
+            {
+                return static_cast<char>(std::tolower(character));
+            }
+        );
+
+        if (normalized == "none" || normalized == "null")
+        {
+            backend = RendererBackend::None;
+            return true;
+        }
+
+        if (normalized == "directx" || normalized == "dx11" || normalized == "d3d11")
+        {
+            backend = RendererBackend::DirectX;
+            return true;
+        }
+
+        if (normalized == "vulkan")
+        {
+            backend = RendererBackend::Vulkan;
+            return true;
+        }
+
+        if (normalized == "metal")
+        {
+            backend = RendererBackend::Metal;
+            return true;
+        }
+
+        return false;
+    }
+
+    RendererBackend Renderer::GetDefaultBackend()
+    {
+#ifdef _WIN32
+        return RendererBackend::DirectX;
+#else
+        return RendererBackend::None;
+#endif
+    }
+
+    bool Renderer::IsBackendAvailable(RendererBackend backend)
+    {
+        switch (backend)
+        {
+            case RendererBackend::None:
+                return true;
+
+            case RendererBackend::DirectX:
+#ifdef _WIN32
+                return true;
+#else
+                return false;
+#endif
+
+            case RendererBackend::Vulkan:
+            case RendererBackend::Metal:
+                return false;
+        }
+
+        return false;
     }
 
     std::unique_ptr<Renderer> Renderer::Create(
@@ -71,6 +145,14 @@ namespace Jevaing::Internal
                 break;
 
             case RendererBackend::DirectX:
+#ifdef _WIN32
+                renderer = std::make_unique<D3D11Renderer>();
+                break;
+#else
+                Logger::Error("DirectX renderer is only available on Windows.");
+                return nullptr;
+#endif
+
             case RendererBackend::Vulkan:
             case RendererBackend::Metal:
                 Logger::Error(
