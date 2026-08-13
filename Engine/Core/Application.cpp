@@ -264,7 +264,7 @@ namespace Jevaing::Internal
 
         if (options.PenguinGraphicsTest)
         {
-            Logger::Info("ATLAS penguin graphics test enabled. 🐧");
+            Logger::Info("ATLAS penguin graphics test enabled.");
         }
         else if (options.GraphicsTest)
         {
@@ -319,7 +319,7 @@ namespace Jevaing::Internal
 
         if (options.PenguinGraphicsTest)
         {
-            Logger::Info("[PASS] ATLAS penguin graphics test completed. 🐧");
+            Logger::Info("[PASS] ATLAS penguin graphics test completed.");
         }
         else if (options.GraphicsTest)
         {
