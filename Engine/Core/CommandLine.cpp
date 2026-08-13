@@ -1,0 +1,102 @@
+#include "CommandLine.h"
+
+#include <iostream>
+#include <limits>
+#include <stdexcept>
+
+namespace Jevaing::Internal
+{
+    bool ParseCommandLine(
+        int argc,
+        char** argv,
+        CommandLineOptions& options,
+        std::string& error
+    )
+    {
+        for (int index = 1; index < argc; ++index)
+        {
+            const std::string argument = argv[index] ? argv[index] : "";
+
+            if (argument == "--help" || argument == "-h")
+            {
+                options.ShowHelp = true;
+            }
+            else if (argument == "--version")
+            {
+                options.ShowVersion = true;
+            }
+            else if (argument == "--self-test")
+            {
+                options.SelfTest = true;
+            }
+            else if (argument == "--renderer-info")
+            {
+                options.ShowRendererInfo = true;
+            }
+            else if (argument == "--renderer")
+            {
+                if (index + 1 >= argc)
+                {
+                    error = "--renderer requires a value.";
+                    return false;
+                }
+
+                options.Renderer = argv[++index] ? argv[index] : "";
+            }
+            else if (argument == "--frames")
+            {
+                if (index + 1 >= argc)
+                {
+                    error = "--frames requires a positive integer.";
+                    return false;
+                }
+
+                const std::string value = argv[++index] ? argv[index] : "";
+
+                try
+                {
+                    const unsigned long long parsed = std::stoull(value);
+
+                    if (parsed == 0 || parsed > std::numeric_limits<std::uint64_t>::max())
+                    {
+                        error = "--frames requires a positive integer.";
+                        return false;
+                    }
+
+                    options.FrameLimit = static_cast<std::uint64_t>(parsed);
+                    options.HasFrameLimit = true;
+                }
+                catch (const std::exception&)
+                {
+                    error = "Invalid value for --frames: " + value;
+                    return false;
+                }
+            }
+            else
+            {
+                error = "Unknown command-line option: " + argument;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    void PrintCommandLineHelp()
+    {
+        std::cout
+            << "Jevaing command-line options\n\n"
+            << "  --help, -h             Show this help.\n"
+            << "  --version              Print the engine version and exit.\n"
+            << "  --self-test            Run core tests without opening a window.\n"
+            << "  --renderer-info        Show renderer backend availability.\n"
+            << "  --renderer <backend>   Select: directx, null, vulkan, metal.\n"
+            << "  --frames <count>       Exit automatically after N frames.\n\n"
+            << "Examples:\n"
+            << "  JevaingSandbox.exe --version\n"
+            << "  JevaingSandbox.exe --self-test\n"
+            << "  JevaingSandbox.exe --renderer-info\n"
+            << "  JevaingSandbox.exe --renderer directx --frames 300\n"
+            << "  JevaingSandbox.exe --renderer null --frames 60\n";
+    }
+}
