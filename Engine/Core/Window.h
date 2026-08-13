@@ -19,6 +19,7 @@ namespace Jevaing::Internal
 
         virtual void Show() = 0;
         virtual bool ProcessEvents() = 0;
+        virtual void* GetNativeHandle() const = 0;
 
         static std::unique_ptr<Window> Create(const WindowConfig& config);
 
