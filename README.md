@@ -4,15 +4,15 @@ Jevaing is an experimental open-source graphics and game engine written in C++.
 
 The project is built step by step with a small, understandable core, platform-specific code behind abstractions, and no mandatory dependency on a store, account system, online service, or vendor platform.
 
-> **Current version:** `0.0.4`
+> **Current version:** `0.0.5`
 >
-> **Codename:** `ARPA+`
+> **Codename:** `ATLAS`
 >
 > **Status:** early prototype — not production ready.
 
 ## What works today
 
-Jevaing 0.0.4 ARPA+ currently provides a small but functional engine foundation on Windows:
+Jevaing 0.0.5 ATLAS currently provides a small but functional engine foundation on Windows:
 
 - C++17 core.
 - CMake build system.
@@ -32,20 +32,25 @@ Jevaing 0.0.4 ARPA+ currently provides a small but functional engine foundation 
 - Null Renderer for architecture and fallback testing.
 - **DirectX 11 renderer on Windows.**
 - DirectX 11 device, swap chain and render-target creation.
-- A real GPU-cleared frame presented to the Win32 window.
+- Runtime HLSL shader compilation.
+- Vertex shader and pixel shader creation.
+- Input layout and immutable vertex buffer.
+- Viewport setup.
+- **First GPU triangle rendered by Jevaing.**
 - Command-line test interface.
 - Headless core self-tests that do not open a window.
 - Automatic frame-limited runs for repeatable renderer tests.
+- `--graphics-test` GPU pipeline smoke test.
 
 Vulkan and Metal are represented in the renderer API but are **not implemented yet**.
 
 Linux and macOS platform implementations are also planned but are not functional yet.
 
-## 0.0.4 ARPA+ goal
+## 0.0.5 ATLAS goal
 
-ARPA introduced the renderer abstraction. ARPA+ makes that abstraction reach a real GPU backend for the first time.
+ATLAS is the first Jevaing version that sends its own geometry through a real graphics pipeline.
 
-The normal Windows path is now:
+The Windows graphics path is now:
 
 ```text
 Sandbox
@@ -63,13 +68,19 @@ Window  Renderer
 Win32   DirectX 11
           |
           v
-     DXGI swap chain
+      HLSL shaders
           |
           v
-       GPU frame
+     Vertex buffer
+          |
+          v
+     Draw(3, 0)
+          |
+          v
+     Colored triangle
 ```
 
-The renderer still does not draw meshes, sprites or a triangle. ARPA+ intentionally stops at a reliable DirectX device/swap-chain/render-target foundation.
+The triangle is intentionally simple. It is renderer bring-up geometry, not yet a public mesh or draw-command API. Its purpose is to prove that the complete DirectX 11 path works from Jevaing's engine loop to the GPU.
 
 ## Repository structure
 
@@ -111,11 +122,11 @@ jevaing/
 
 ## Dependencies
 
-### Required to build ARPA+ on Windows
+### Required to build ATLAS on Windows
 
 - **CMake 3.20 or newer**.
 - A **C++17-compatible compiler**.
-- **Windows SDK** with Win32 and Direct3D 11 headers/libraries.
+- **Windows SDK** with Win32 and Direct3D 11 development files.
 - A Windows C++ toolchain such as **MSVC / Visual Studio Build Tools**.
 - Git is recommended.
 
@@ -127,6 +138,9 @@ Jevaing currently uses Windows-provided libraries only:
 - `gdi32`
 - `d3d11`
 - `dxgi`
+- `d3dcompiler`
+
+`d3dcompiler` is used by ATLAS to compile the small embedded HLSL bring-up shader at runtime.
 
 No SDL, GLFW, Qt, DirectXTK, third-party game engine or third-party runtime is required.
 
@@ -160,22 +174,22 @@ Run normally:
 The window title should be:
 
 ```text
-Jevaing 0.0.4 - ARPA+
+Jevaing 0.0.5 - ATLAS
 ```
+
+On Windows with the DirectX backend, the window should show a colored triangle over a dark blue background.
 
 The console should include lines similar to:
 
 ```text
-[Jevaing][INFO] DirectX 11 device and swap chain initialized.
+[Jevaing][INFO] DirectX 11 device, swap chain and ATLAS triangle pipeline initialized.
 [Jevaing][INFO] Renderer initialized: DirectX 11 Renderer [DirectX]
 [Jevaing][INFO] Engine initialized.
 ```
 
-The window should be cleared by DirectX every frame. This is the first version where the visible client area is produced by a real GPU renderer instead of only the Win32 background brush.
-
 ## Command-line testing
 
-ARPA+ adds command-line commands so engine behavior can be checked from PowerShell, scripts and eventually CI.
+ATLAS keeps the ARPA+ command-line test interface and adds a graphics-pipeline smoke test.
 
 ### Show available commands
 
@@ -192,7 +206,7 @@ ARPA+ adds command-line commands so engine behavior can be checked from PowerShe
 Expected:
 
 ```text
-Jevaing 0.0.4 - ARPA+
+Jevaing 0.0.5 - ATLAS
 ```
 
 ### Run core self-tests
@@ -201,24 +215,7 @@ Jevaing 0.0.4 - ARPA+
 .\bin\Debug\JevaingSandbox.exe --self-test
 ```
 
-This does **not** open a window.
-
-It currently checks:
-
-- version availability;
-- codename availability;
-- positive timer delta time;
-- renderer-name parsing;
-- Null Renderer availability;
-- default renderer availability.
-
-A healthy run ends with:
-
-```text
-[Jevaing][INFO] Self-tests completed successfully.
-```
-
-The process returns exit code `0` when all tests pass.
+This does **not** open a window. A healthy run returns exit code `0`.
 
 ### Inspect renderer availability
 
@@ -236,6 +233,38 @@ Metal: not available
 Default renderer: DirectX
 ```
 
+### Run the ATLAS graphics smoke test
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --graphics-test
+```
+
+On Windows this selects the default DirectX renderer, creates the complete ATLAS shader/input-layout/vertex-buffer pipeline, renders the colored triangle for 180 frames and exits automatically.
+
+A successful run ends with:
+
+```text
+[Jevaing][INFO] [PASS] ATLAS graphics pipeline smoke test completed.
+```
+
+You can inspect the exit code with:
+
+```powershell
+$LASTEXITCODE
+```
+
+Expected after a successful graphics test:
+
+```text
+0
+```
+
+You can override the frame count:
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --graphics-test --frames 600
+```
+
 ### Force DirectX 11
 
 ```powershell
@@ -250,7 +279,9 @@ Aliases accepted for this backend include `dx11` and `d3d11`.
 .\bin\Debug\JevaingSandbox.exe --renderer null
 ```
 
-This keeps the engine loop and window alive but performs no GPU rendering. It is useful for comparing platform behavior against the DirectX backend.
+The Null Renderer performs no GPU rendering and remains useful for testing the platform/event-loop layer independently.
+
+`--graphics-test` intentionally rejects the Null Renderer because the graphics smoke test must exercise a real GPU backend.
 
 ### Run a fixed number of frames
 
@@ -258,15 +289,7 @@ This keeps the engine loop and window alive but performs no GPU rendering. It is
 .\bin\Debug\JevaingSandbox.exe --renderer directx --frames 300
 ```
 
-Jevaing will open the window, render exactly 300 loop frames, shut down and return control to PowerShell automatically.
-
-This is useful for smoke tests because it does not require manually pressing `ESC`.
-
-The Null Renderer can be tested the same way:
-
-```powershell
-.\bin\Debug\JevaingSandbox.exe --renderer null --frames 60
-```
+Jevaing opens the window, renders 300 frames, shuts down and returns control to PowerShell automatically.
 
 ### Test an unavailable backend
 
@@ -274,13 +297,7 @@ The Null Renderer can be tested the same way:
 .\bin\Debug\JevaingSandbox.exe --renderer vulkan
 ```
 
-ARPA+ should fail explicitly and return a non-zero exit code instead of silently falling back to another backend.
-
-You can inspect the last process exit code in PowerShell with:
-
-```powershell
-$LASTEXITCODE
-```
+ATLAS should fail explicitly and return a non-zero exit code instead of silently falling back.
 
 ## Release build
 
@@ -299,7 +316,7 @@ bin/Release/
 | Backend | Status | Notes |
 |---|---|---|
 | Null | Working | No GPU work; architecture/testing backend |
-| DirectX 11 | Working prototype | Windows device + swap chain + frame clear/present |
+| DirectX 11 | Working prototype | Device + swap chain + shaders + vertex buffer + first triangle |
 | Vulkan | Planned | Not implemented |
 | Metal | Planned | Not implemented |
 
@@ -364,23 +381,31 @@ The roadmap is intentionally flexible.
 - [x] DXGI swap chain.
 - [x] Render-target view.
 - [x] GPU frame clear and present.
-- [x] Command-line argument forwarding.
-- [x] `--help`.
-- [x] `--version`.
-- [x] `--self-test`.
-- [x] `--renderer-info`.
-- [x] Renderer selection from CLI.
+- [x] Command-line test interface.
 - [x] Fixed-frame smoke-test mode.
+
+### 0.0.5 — ATLAS
+
+- [x] Runtime HLSL compilation.
+- [x] DirectX vertex shader.
+- [x] DirectX pixel shader.
+- [x] Input layout.
+- [x] Vertex buffer.
+- [x] Viewport setup.
+- [x] First colored GPU triangle.
+- [x] `--graphics-test` command.
+- [x] Automatic graphics-pipeline smoke test.
 
 ### Next graphics work
 
 - [ ] Handle swap-chain resize properly.
-- [ ] DirectX shader compilation/loading.
-- [ ] Vertex buffer.
-- [ ] First GPU triangle.
+- [ ] Move bring-up shaders out of renderer implementation.
+- [ ] Common shader abstraction.
 - [ ] Common GPU-buffer abstraction.
+- [ ] Renderer draw-command API.
 - [ ] Texture loading.
 - [ ] Basic 2D rendering.
+- [ ] Camera system.
 - [ ] Vulkan backend.
 - [ ] Metal backend.
 
@@ -411,7 +436,7 @@ Jevaing is pre-alpha and uses `0.x.x` versions.
 
 Until `1.0`, APIs, source layout and internal architecture may change without backwards-compatibility guarantees.
 
-Development releases use internal codenames such as `RENACO`, `MARIA`, `ARPA` and `ARPA+`.
+Development releases use internal codenames such as `RENACO`, `MARIA`, `ARPA`, `ARPA+` and `ATLAS`.
 
 ## Contributing
 

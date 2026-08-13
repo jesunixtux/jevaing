@@ -191,6 +191,18 @@ namespace Jevaing::Internal
             return 2;
         }
 
+        if (options.GraphicsTest && selectedBackend == RendererBackend::None)
+        {
+            Logger::Error("--graphics-test requires a GPU-backed renderer.");
+            return 2;
+        }
+
+        if (options.GraphicsTest && !options.HasFrameLimit)
+        {
+            options.HasFrameLimit = true;
+            options.FrameLimit = 180;
+        }
+
         WindowConfig windowConfig;
         windowConfig.Title = engineName;
         windowConfig.Width = WindowWidth;
@@ -235,6 +247,11 @@ namespace Jevaing::Internal
             "]"
         );
 
+        if (options.GraphicsTest)
+        {
+            Logger::Info("ATLAS graphics test enabled: colored triangle pipeline smoke test.");
+        }
+
         if (options.HasFrameLimit)
         {
             Logger::Info(
@@ -260,7 +277,7 @@ namespace Jevaing::Internal
 
             renderer->BeginFrame();
 
-            // ARPA+ 0.0.4: the frame now reaches a real GPU backend on Windows.
+            // ATLAS 0.0.5: DirectX now executes a minimal shader + vertex-buffer pipeline.
 
             renderer->EndFrame();
             ++frameCount;
@@ -279,6 +296,11 @@ namespace Jevaing::Internal
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
+        }
+
+        if (options.GraphicsTest)
+        {
+            Logger::Info("[PASS] ATLAS graphics pipeline smoke test completed.");
         }
 
         Logger::Info("Shutting down...");

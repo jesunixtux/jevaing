@@ -34,6 +34,10 @@ namespace Jevaing::Internal
             {
                 options.ShowRendererInfo = true;
             }
+            else if (argument == "--graphics-test")
+            {
+                options.GraphicsTest = true;
+            }
             else if (argument == "--renderer")
             {
                 if (index + 1 >= argc)
@@ -108,12 +112,14 @@ namespace Jevaing::Internal
             << "  --version              Print the engine version and exit.\n"
             << "  --self-test            Run core tests without opening a window.\n"
             << "  --renderer-info        Show renderer backend availability.\n"
+            << "  --graphics-test        Run the GPU pipeline smoke test.\n"
             << "  --renderer <backend>   Select: directx, null, vulkan, metal.\n"
             << "  --frames <count>       Exit automatically after N frames.\n\n"
             << "Examples:\n"
             << "  JevaingSandbox.exe --version\n"
             << "  JevaingSandbox.exe --self-test\n"
             << "  JevaingSandbox.exe --renderer-info\n"
+            << "  JevaingSandbox.exe --graphics-test\n"
             << "  JevaingSandbox.exe --renderer directx --frames 300\n"
             << "  JevaingSandbox.exe --renderer null --frames 60\n";
     }

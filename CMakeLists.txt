@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 project(
     Jevaing
-    VERSION 0.0.4
+    VERSION 0.0.5
     LANGUAGES CXX
 )
 
@@ -42,6 +42,7 @@ if(WIN32)
             gdi32
             d3d11
             dxgi
+            d3dcompiler
     )
 endif()
 
