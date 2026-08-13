@@ -12,6 +12,9 @@ namespace Jevaing::Internal
 {
     int Application::Run()
     {
+        constexpr int WindowWidth = 1280;
+        constexpr int WindowHeight = 720;
+
         std::cout
             << "=============================="
             << std::endl;
@@ -42,12 +45,16 @@ namespace Jevaing::Internal
 
 #ifdef _WIN32
 
+        std::cout
+            << "[Jevaing] Platform: Windows (Win32)"
+            << std::endl;
+
         Platform::WindowsWindow window;
 
         if (!window.Create(
             L"Jevaing 0.0.1 - RENACO",
-            1280,
-            720
+            WindowWidth,
+            WindowHeight
         ))
         {
             std::cerr
@@ -60,7 +67,14 @@ namespace Jevaing::Internal
         window.Show();
 
         std::cout
-            << "[Jevaing] Window created."
+            << "[Jevaing] Window created: "
+            << WindowWidth
+            << "x"
+            << WindowHeight
+            << std::endl;
+
+        std::cout
+            << "[Jevaing] Press ESC or close the window to exit."
             << std::endl;
 
         std::cout
@@ -69,11 +83,7 @@ namespace Jevaing::Internal
 
         while (window.ProcessMessages())
         {
-            // Futuro:
-            //
-            // Input
-            // Update
-            // Render
+            // RENACO 0.0.1: basic native event loop.
         }
 
 #else
