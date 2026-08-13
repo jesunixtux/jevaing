@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include <geometry/3D/Primitives/Cube.h>
+
 #include "../../Core/Logger.h"
 #include "../../Core/Window.h"
 
@@ -73,110 +75,14 @@ float4 PSMain(VSOutput input) : SV_TARGET
             };
         }
 
-        Color ScaleColor(const Color& color, float scale)
+        Color MultiplyColor(const Color& left, const Color& right)
         {
             return {
-                color.R * scale,
-                color.G * scale,
-                color.B * scale,
-                color.A
+                left.R * right.R,
+                left.G * right.G,
+                left.B * right.B,
+                left.A * right.A
             };
-        }
-
-        void AppendVertex3D(
-            std::vector<D3D11Vertex>& vertices,
-            const Vec3& position,
-            const Color& color
-        )
-        {
-            vertices.push_back({
-                { position.X, position.Y, position.Z },
-                { color.R, color.G, color.B, color.A }
-            });
-        }
-
-        void AppendQuad3D(
-            std::vector<D3D11Vertex>& vertices,
-            const Vec3& a,
-            const Vec3& b,
-            const Vec3& c,
-            const Vec3& d,
-            const Color& color
-        )
-        {
-            AppendVertex3D(vertices, a, color);
-            AppendVertex3D(vertices, b, color);
-            AppendVertex3D(vertices, c, color);
-            AppendVertex3D(vertices, a, color);
-            AppendVertex3D(vertices, c, color);
-            AppendVertex3D(vertices, d, color);
-        }
-
-        void AppendCubeVertices(
-            std::vector<D3D11Vertex>& vertices,
-            const Color& color
-        )
-        {
-            constexpr float HalfSize = 0.5f;
-
-            const Vec3 frontTopLeft = { -HalfSize, HalfSize, -HalfSize };
-            const Vec3 frontTopRight = { HalfSize, HalfSize, -HalfSize };
-            const Vec3 frontBottomRight = { HalfSize, -HalfSize, -HalfSize };
-            const Vec3 frontBottomLeft = { -HalfSize, -HalfSize, -HalfSize };
-
-            const Vec3 backTopLeft = { -HalfSize, HalfSize, HalfSize };
-            const Vec3 backTopRight = { HalfSize, HalfSize, HalfSize };
-            const Vec3 backBottomRight = { HalfSize, -HalfSize, HalfSize };
-            const Vec3 backBottomLeft = { -HalfSize, -HalfSize, HalfSize };
-
-            AppendQuad3D(
-                vertices,
-                frontTopLeft,
-                frontTopRight,
-                frontBottomRight,
-                frontBottomLeft,
-                ScaleColor(color, 1.00f)
-            );
-            AppendQuad3D(
-                vertices,
-                backTopRight,
-                backTopLeft,
-                backBottomLeft,
-                backBottomRight,
-                ScaleColor(color, 0.58f)
-            );
-            AppendQuad3D(
-                vertices,
-                backTopLeft,
-                frontTopLeft,
-                frontBottomLeft,
-                backBottomLeft,
-                ScaleColor(color, 0.72f)
-            );
-            AppendQuad3D(
-                vertices,
-                frontTopRight,
-                backTopRight,
-                backBottomRight,
-                frontBottomRight,
-                ScaleColor(color, 0.84f)
-            );
-            AppendQuad3D(
-                vertices,
-                backTopLeft,
-                backTopRight,
-                frontTopRight,
-                frontTopLeft,
-                ScaleColor(color, 1.12f)
-            );
-            AppendQuad3D(
-                vertices,
-                frontBottomLeft,
-                frontBottomRight,
-                backBottomRight,
-                backBottomLeft,
-                ScaleColor(color, 0.46f)
-            );
         }
 
         void AppendTriangleVertices(
@@ -282,7 +188,7 @@ float4 PSMain(VSOutput input) : SV_TARGET
             const HRESULT result = D3DCompile(
                 ShaderSource,
                 sizeof(ShaderSource) - 1,
-                "JevaingBigBearGummy2D",
+                "Jevaing3DShader",
                 nullptr,
                 nullptr,
                 entryPoint,
@@ -321,8 +227,10 @@ float4 PSMain(VSOutput input) : SV_TARGET
         }
     }
 
-    D3D11Renderer::D3D11Renderer(RendererTestPattern testPattern)
-        : m_testPattern(testPattern)
+    D3D11Renderer::D3D11Renderer(const RendererConfig& config)
+        : m_testPattern(config.TestPattern),
+          m_testMesh(config.TestMesh),
+          m_testMeshTint(config.TestMeshTint)
     {
     }
 
@@ -690,7 +598,7 @@ float4 PSMain(VSOutput input) : SV_TARGET
 
         if (FAILED(result) || !m_vertexBuffer)
         {
-            Logger::Error("DirectX 11 failed to allocate the dynamic 2D vertex buffer.");
+            Logger::Error("DirectX 11 failed to allocate the dynamic vertex buffer.");
             m_vertexCapacity = 0;
             return false;
         }
@@ -794,15 +702,38 @@ float4 PSMain(VSOutput input) : SV_TARGET
         m_camera = camera;
     }
 
-    void D3D11Renderer::DrawCube(
+    void D3D11Renderer::DrawMesh(
+        const Geometry3D::Mesh& mesh,
         const Transform& transform,
-        const Color& color
+        const Color& tint
     )
     {
+        if (mesh.Empty())
+        {
+            return;
+        }
+
         D3D11DrawBatch batch;
         batch.StartVertex = m_frame3DVertices.size();
 
-        AppendCubeVertices(m_frame3DVertices, color);
+        for (const Geometry3D::MeshVertex& vertex : mesh.Vertices)
+        {
+            const Color color = MultiplyColor(vertex.VertexColor, tint);
+
+            m_frame3DVertices.push_back({
+                {
+                    vertex.Position.X,
+                    vertex.Position.Y,
+                    vertex.Position.Z
+                },
+                {
+                    color.R,
+                    color.G,
+                    color.B,
+                    color.A
+                }
+            });
+        }
 
         batch.VertexCount = m_frame3DVertices.size() - batch.StartVertex;
         batch.ModelViewProjection =
@@ -811,6 +742,15 @@ float4 PSMain(VSOutput input) : SV_TARGET
             m_camera.GetProjectionMatrix();
 
         m_3DDrawBatches.push_back(batch);
+    }
+
+    void D3D11Renderer::DrawCube(
+        const Transform& transform,
+        const Color& color
+    )
+    {
+        static const Geometry3D::Mesh cube = Geometry3D::CreateCubeMesh();
+        DrawMesh(cube, transform, color);
     }
 
     void D3D11Renderer::AppendTestPattern()
@@ -848,6 +788,33 @@ float4 PSMain(VSOutput input) : SV_TARGET
                     0.0f
                 };
                 DrawCube(transform, { 0.25f, 0.72f, 1.0f, 1.0f });
+                return;
+            }
+
+            case RendererTestPattern::ExternalModel:
+            {
+                if (!m_testMesh || m_testMesh->Empty())
+                {
+                    return;
+                }
+
+                PerspectiveCamera camera;
+                camera.Position = { 0.0f, 0.45f, -4.5f };
+                camera.Target = { 0.0f, 0.0f, 0.0f };
+                camera.AspectRatio =
+                    m_viewport.Height > 0.0f
+                        ? m_viewport.Width / m_viewport.Height
+                        : 1.0f;
+                SetCamera(camera);
+
+                Transform transform;
+                transform.Rotation = {
+                    static_cast<float>(m_frameIndex) * 0.008f,
+                    static_cast<float>(m_frameIndex) * 0.016f,
+                    0.0f
+                };
+
+                DrawMesh(*m_testMesh, transform, m_testMeshTint);
                 return;
             }
         }

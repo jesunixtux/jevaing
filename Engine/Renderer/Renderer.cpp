@@ -179,7 +179,7 @@ namespace Jevaing::Internal
 
             case RendererBackend::DirectX:
 #ifdef _WIN32
-                renderer = std::make_unique<D3D11Renderer>(config.TestPattern);
+                renderer = std::make_unique<D3D11Renderer>(config);
                 break;
 #else
                 Logger::Error("DirectX renderer is only available on Windows.");

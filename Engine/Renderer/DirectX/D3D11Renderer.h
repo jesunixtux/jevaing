@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <vector>
 
 #include <d3d11.h>
@@ -29,7 +30,7 @@ namespace Jevaing::Internal
     class D3D11Renderer final : public Renderer
     {
     public:
-        explicit D3D11Renderer(RendererTestPattern testPattern);
+        explicit D3D11Renderer(const RendererConfig& config);
         ~D3D11Renderer() override;
 
         bool Initialize(Window& window) override;
@@ -67,6 +68,11 @@ namespace Jevaing::Internal
         bool CreateRenderTarget(int width, int height);
         bool CreateDepthBuffer(int width, int height);
         bool EnsureVertexCapacity(std::size_t requiredVertices);
+        void DrawMesh(
+            const Geometry3D::Mesh& mesh,
+            const Transform& transform,
+            const Color& tint
+        );
         void AppendTestPattern();
         void Flush2DDrawCommands();
         void Flush3DDrawCommands();
@@ -74,6 +80,8 @@ namespace Jevaing::Internal
 
     private:
         RendererTestPattern m_testPattern = RendererTestPattern::None;
+        std::shared_ptr<const Geometry3D::Mesh> m_testMesh;
+        Color m_testMeshTint = { 1.0f, 1.0f, 1.0f, 1.0f };
         std::vector<D3D11Vertex> m_frame2DVertices;
         std::vector<D3D11Vertex> m_frame3DVertices;
         std::vector<D3D11DrawBatch> m_3DDrawBatches;

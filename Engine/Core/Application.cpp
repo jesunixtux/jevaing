@@ -1,12 +1,16 @@
 #include <chrono>
 #include <cstdint>
+#include <filesystem>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <thread>
 
 #include <Jevaing/Game.h>
 #include <Jevaing/Input.h>
 #include <Jevaing/Jevaing.h>
+
+#include <geometry/3D/ModelLoader.h>
 
 #include "Application.h"
 #include "CommandLine.h"
@@ -30,6 +34,66 @@ namespace Jevaing::Internal
 
             Logger::Error("[FAIL] " + name);
             return false;
+        }
+
+        std::string ResolveTestAssetPath(const std::string& relativePath)
+        {
+            namespace fs = std::filesystem;
+
+            std::error_code error;
+            const fs::path directPath(relativePath);
+
+            if (fs::exists(directPath, error))
+            {
+                return directPath.string();
+            }
+
+#ifdef JEVAING_SOURCE_ROOT
+            error.clear();
+            const fs::path sourcePath = fs::path(JEVAING_SOURCE_ROOT) / directPath;
+
+            if (fs::exists(sourcePath, error))
+            {
+                return sourcePath.string();
+            }
+#endif
+
+            return directPath.string();
+        }
+
+        bool PrepareExternalTestMesh(
+            const std::string& relativePath,
+            std::shared_ptr<const Geometry3D::Mesh>& outputMesh,
+            std::string& error
+        )
+        {
+            const std::string resolvedPath = ResolveTestAssetPath(relativePath);
+            auto mesh = std::make_shared<Geometry3D::Mesh>();
+
+            Geometry3D::ModelLoadOptions loadOptions;
+            loadOptions.CenterAndNormalize = true;
+            loadOptions.TargetExtent = 1.8f;
+
+            if (!Geometry3D::ModelLoader::Load(
+                resolvedPath,
+                *mesh,
+                loadOptions,
+                error
+            ))
+            {
+                return false;
+            }
+
+            Logger::Info(
+                "Loaded external 3D test model: " +
+                relativePath +
+                " (" +
+                std::to_string(mesh->TriangleCount()) +
+                " triangles)"
+            );
+
+            outputMesh = mesh;
+            return true;
         }
 
         int RunSelfTests()
@@ -219,20 +283,22 @@ namespace Jevaing::Internal
         const int graphicsTestCount =
             (options.GraphicsTest ? 1 : 0) +
             (options.PenguinGraphicsTest ? 1 : 0) +
-            (options.GraphicsTest3D ? 1 : 0);
+            (options.GraphicsTest3D ? 1 : 0) +
+            (options.PenguinTest3D ? 1 : 0) +
+            (options.Gummy3DTest ? 1 : 0);
 
         if (graphicsTestCount > 1)
         {
-            Logger::Error(
-                "Only one graphics test can be selected at a time."
-            );
+            Logger::Error("Only one graphics test can be selected at a time.");
             return 2;
         }
 
         const bool graphicsTestRequested =
             options.GraphicsTest ||
             options.PenguinGraphicsTest ||
-            options.GraphicsTest3D;
+            options.GraphicsTest3D ||
+            options.PenguinTest3D ||
+            options.Gummy3DTest;
 
         if (options.RuntimeTest && graphicsTestRequested)
         {
@@ -305,6 +371,40 @@ namespace Jevaing::Internal
             return 2;
         }
 
+        std::shared_ptr<const Geometry3D::Mesh> externalTestMesh;
+        Color externalTestTint = { 1.0f, 1.0f, 1.0f, 1.0f };
+
+        if (options.PenguinTest3D)
+        {
+            std::string loadError;
+            if (!PrepareExternalTestMesh(
+                "geometry/3D/.hide/easter/tux.glb",
+                externalTestMesh,
+                loadError
+            ))
+            {
+                Logger::Error(loadError);
+                return 2;
+            }
+
+            externalTestTint = { 0.88f, 0.95f, 1.0f, 1.0f };
+        }
+        else if (options.Gummy3DTest)
+        {
+            std::string loadError;
+            if (!PrepareExternalTestMesh(
+                "geometry/3D/.hide/easter/gummybear.fbx",
+                externalTestMesh,
+                loadError
+            ))
+            {
+                Logger::Error(loadError);
+                return 2;
+            }
+
+            externalTestTint = { 1.0f, 0.62f, 0.48f, 1.0f };
+        }
+
         WindowConfig windowConfig;
         windowConfig.Title = windowTitle;
         windowConfig.Width = windowWidth;
@@ -338,6 +438,12 @@ namespace Jevaing::Internal
         {
             rendererConfig.TestPattern = RendererTestPattern::Cube;
         }
+        else if (options.PenguinTest3D || options.Gummy3DTest)
+        {
+            rendererConfig.TestPattern = RendererTestPattern::ExternalModel;
+            rendererConfig.TestMesh = externalTestMesh;
+            rendererConfig.TestMeshTint = externalTestTint;
+        }
         else if (options.GraphicsTest || !game)
         {
             rendererConfig.TestPattern = RendererTestPattern::Triangle;
@@ -368,11 +474,19 @@ namespace Jevaing::Internal
 
         if (options.PenguinGraphicsTest)
         {
-            Logger::Info("BIG BEAR GUMMY penguin graphics test enabled.");
+            Logger::Info("BIG BEAR GUMMY 2D penguin graphics test enabled.");
         }
         else if (options.GraphicsTest3D)
         {
             Logger::Info("BIG BEAR GUMMY 3D cube graphics test enabled.");
+        }
+        else if (options.PenguinTest3D)
+        {
+            Logger::Info("External Tux GLB 3D test enabled.");
+        }
+        else if (options.Gummy3DTest)
+        {
+            Logger::Info("External gummy bear FBX 3D test enabled.");
         }
         else if (options.GraphicsTest)
         {
@@ -506,11 +620,19 @@ namespace Jevaing::Internal
 
         if (exitCode == 0 && options.PenguinGraphicsTest)
         {
-            Logger::Info("[PASS] BIG BEAR GUMMY penguin graphics test completed.");
+            Logger::Info("[PASS] BIG BEAR GUMMY 2D penguin graphics test completed.");
         }
         else if (exitCode == 0 && options.GraphicsTest3D)
         {
             Logger::Info("[PASS] BIG BEAR GUMMY 3D cube graphics test completed.");
+        }
+        else if (exitCode == 0 && options.PenguinTest3D)
+        {
+            Logger::Info("[PASS] Tux GLB external-model test completed.");
+        }
+        else if (exitCode == 0 && options.Gummy3DTest)
+        {
+            Logger::Info("[PASS] Gummy bear FBX external-model test completed.");
         }
         else if (exitCode == 0 && options.GraphicsTest)
         {
