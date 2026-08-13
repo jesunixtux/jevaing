@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 
 namespace Jevaing::Internal
 {
@@ -34,7 +35,11 @@ namespace Jevaing::Internal
             const RendererConfig& config,
             Window& window
         );
+
+        static RendererBackend GetDefaultBackend();
+        static bool IsBackendAvailable(RendererBackend backend);
     };
 
     const char* RendererBackendToString(RendererBackend backend);
+    bool RendererBackendFromString(const std::string& name, RendererBackend& backend);
 }
