@@ -12,7 +12,7 @@ namespace Jevaing::Internal
     class D3D11Renderer final : public Renderer
     {
     public:
-        D3D11Renderer() = default;
+        explicit D3D11Renderer(RendererTestPattern testPattern);
         ~D3D11Renderer() override;
 
         bool Initialize(Window& window) override;
@@ -22,10 +22,12 @@ namespace Jevaing::Internal
         RendererBackend GetBackend() const override;
 
     private:
-        bool CreateTrianglePipeline(HWND hwnd);
+        bool CreateTestPipeline(HWND hwnd);
         void ReleaseResources();
 
     private:
+        RendererTestPattern m_testPattern = RendererTestPattern::Triangle;
+        UINT m_vertexCount = 0;
         IDXGISwapChain* m_swapChain = nullptr;
         ID3D11Device* m_device = nullptr;
         ID3D11DeviceContext* m_context = nullptr;
