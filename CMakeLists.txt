@@ -10,10 +10,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# API pública
+# API pÃºblica
 add_subdirectory(Api)
 
-# Núcleo de Jevaing
+# NÃºcleo de Jevaing
 add_library(JevaingEngine STATIC
     Engine/Core/Application.cpp
     Engine/Core/Version.cpp
@@ -23,6 +23,11 @@ if(WIN32)
 
     target_sources(JevaingEngine PRIVATE
         Engine/Platform/Windows/WindowsWindow.cpp
+    )
+
+    target_compile_definitions(JevaingEngine PRIVATE
+        UNICODE
+        _UNICODE
     )
 
     target_link_libraries(
