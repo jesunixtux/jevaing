@@ -121,6 +121,7 @@ namespace Jevaing::Platform
         {
             if (message.message == WM_QUIT)
             {
+                m_window = nullptr;
                 return false;
             }
 
