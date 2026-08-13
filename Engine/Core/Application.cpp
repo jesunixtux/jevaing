@@ -8,6 +8,7 @@
 #include "Logger.h"
 #include "Timer.h"
 #include "Window.h"
+#include "../Renderer/Renderer.h"
 
 namespace Jevaing::Internal
 {
@@ -45,6 +46,28 @@ namespace Jevaing::Internal
         );
         Logger::Info("Press ESC or close the window to exit.");
 
+        RendererConfig rendererConfig;
+        rendererConfig.Backend = RendererBackend::None;
+
+        std::unique_ptr<Renderer> renderer = Renderer::Create(
+            rendererConfig,
+            *window
+        );
+
+        if (!renderer)
+        {
+            Logger::Error("Failed to create the renderer.");
+            return 1;
+        }
+
+        Logger::Info(
+            std::string("Renderer initialized: ") +
+            renderer->GetName() +
+            " [" +
+            RendererBackendToString(renderer->GetBackend()) +
+            "]"
+        );
+
         Timer timer;
         Logger::Info("Timer initialized.");
         Logger::Info("Engine initialized.");
@@ -54,8 +77,13 @@ namespace Jevaing::Internal
             const double deltaTime = timer.Tick();
             (void)deltaTime;
 
-            // MARIA 0.0.2: basic engine loop foundation.
-            // Future systems will consume deltaTime here.
+            renderer->BeginFrame();
+
+            // ARPA 0.0.3: renderer-independent frame boundary.
+            // Future update and render systems will live here.
+
+            renderer->EndFrame();
+
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
 
