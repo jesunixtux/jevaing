@@ -19,6 +19,20 @@ add_library(JevaingEngine STATIC
     Engine/Core/Version.cpp
 )
 
+if(WIN32)
+
+    target_sources(JevaingEngine PRIVATE
+        Engine/Platform/Windows/WindowsWindow.cpp
+    )
+
+    target_link_libraries(
+        JevaingEngine
+        PRIVATE
+            user32
+    )
+
+endif()
+
 target_include_directories(JevaingEngine
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/Engine/Core
