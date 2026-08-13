@@ -2,6 +2,9 @@
 
 #ifdef _WIN32
 
+#include <cstddef>
+#include <vector>
+
 #include <d3d11.h>
 #include <dxgi.h>
 
@@ -9,6 +12,12 @@
 
 namespace Jevaing::Internal
 {
+    struct D3D11Vertex
+    {
+        float Position[3];
+        float Color[4];
+    };
+
     class D3D11Renderer final : public Renderer
     {
     public:
@@ -16,18 +25,40 @@ namespace Jevaing::Internal
         ~D3D11Renderer() override;
 
         bool Initialize(Window& window) override;
+        bool Resize(int width, int height) override;
         void BeginFrame() override;
         void EndFrame() override;
+
+        void Clear(const Color& color) override;
+
+        void DrawTriangle(
+            const Vec2& a,
+            const Vec2& b,
+            const Vec2& c,
+            const Color& color
+        ) override;
+
+        void DrawQuad(
+            const Vec2& center,
+            const Vec2& size,
+            const Color& color
+        ) override;
+
         const char* GetName() const override;
         RendererBackend GetBackend() const override;
 
     private:
-        bool CreateTestPipeline(HWND hwnd);
+        bool Create2DPipeline();
+        bool CreateRenderTarget(int width, int height);
+        bool EnsureVertexCapacity(std::size_t requiredVertices);
+        void AppendTestPattern();
+        void FlushDrawCommands();
         void ReleaseResources();
 
     private:
-        RendererTestPattern m_testPattern = RendererTestPattern::Triangle;
-        UINT m_vertexCount = 0;
+        RendererTestPattern m_testPattern = RendererTestPattern::None;
+        std::vector<D3D11Vertex> m_frameVertices;
+        std::size_t m_vertexCapacity = 0;
         IDXGISwapChain* m_swapChain = nullptr;
         ID3D11Device* m_device = nullptr;
         ID3D11DeviceContext* m_context = nullptr;

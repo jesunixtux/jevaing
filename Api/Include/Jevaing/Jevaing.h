@@ -1,16 +1,18 @@
 #pragma once
 
+#include "Game.h"
+#include "Graphics2D.h"
+#include "Input.h"
+#include "Types.h"
+
 namespace Jevaing
 {
-    // Returns the current engine version.
     const char* GetVersion();
-
-    // Returns the current development codename.
     const char* GetCodename();
 
-    // Starts Jevaing without command-line arguments.
     int Run();
-
-    // Starts Jevaing and forwards command-line arguments to the engine.
     int Run(int argc, char** argv);
+
+    int Run(Game& game, const GameConfig& config);
+    int Run(Game& game, const GameConfig& config, int argc, char** argv);
 }

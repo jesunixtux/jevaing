@@ -3,6 +3,8 @@
 #include <memory>
 #include <string>
 
+#include <Jevaing/Graphics2D.h>
+
 namespace Jevaing::Internal
 {
     class Window;
@@ -17,6 +19,7 @@ namespace Jevaing::Internal
 
     enum class RendererTestPattern
     {
+        None,
         Triangle,
         Penguin
     };
@@ -24,15 +27,16 @@ namespace Jevaing::Internal
     struct RendererConfig
     {
         RendererBackend Backend = RendererBackend::None;
-        RendererTestPattern TestPattern = RendererTestPattern::Triangle;
+        RendererTestPattern TestPattern = RendererTestPattern::None;
     };
 
-    class Renderer
+    class Renderer : public Jevaing::Graphics2D
     {
     public:
-        virtual ~Renderer() = default;
+        ~Renderer() override = default;
 
         virtual bool Initialize(Window& window) = 0;
+        virtual bool Resize(int width, int height) = 0;
         virtual void BeginFrame() = 0;
         virtual void EndFrame() = 0;
         virtual const char* GetName() const = 0;

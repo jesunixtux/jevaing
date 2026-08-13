@@ -4,10 +4,13 @@
 #include <string>
 #include <thread>
 
+#include <Jevaing/Game.h>
+#include <Jevaing/Input.h>
 #include <Jevaing/Jevaing.h>
 
 #include "Application.h"
 #include "CommandLine.h"
+#include "InputState.h"
 #include "Logger.h"
 #include "Timer.h"
 #include "Window.h"
@@ -79,6 +82,18 @@ namespace Jevaing::Internal
                 RendererBackendToString(defaultBackend)
             );
 
+            InputState::Reset();
+            success &= ReportTest(
+                !Jevaing::Input::IsKeyDown(Jevaing::Key::W),
+                "Input starts in a released state"
+            );
+
+            Jevaing::GameConfig defaultConfig;
+            success &= ReportTest(
+                defaultConfig.Width > 0 && defaultConfig.Height > 0,
+                "GameConfig has a valid default window size"
+            );
+
             if (success)
             {
                 Logger::Info("Self-tests completed successfully.");
@@ -119,10 +134,20 @@ namespace Jevaing::Internal
 
     int Application::Run()
     {
-        return Run(0, nullptr);
+        return Run(nullptr, nullptr, 0, nullptr);
     }
 
     int Application::Run(int argc, char** argv)
+    {
+        return Run(nullptr, nullptr, argc, argv);
+    }
+
+    int Application::Run(
+        Game* game,
+        const GameConfig* config,
+        int argc,
+        char** argv
+    )
     {
         CommandLineOptions options;
         std::string commandLineError;
@@ -173,11 +198,47 @@ namespace Jevaing::Internal
         const bool graphicsTestRequested =
             options.GraphicsTest || options.PenguinGraphicsTest;
 
-        constexpr int WindowWidth = 1280;
-        constexpr int WindowHeight = 720;
+        if (options.RuntimeTest && graphicsTestRequested)
+        {
+            Logger::Error("--runtime-test cannot be combined with a graphics test.");
+            return 2;
+        }
+
+        if (options.RuntimeTest && !game)
+        {
+            Logger::Error("--runtime-test requires a client Game instance.");
+            return 2;
+        }
+
+        if (graphicsTestRequested && !options.HasFrameLimit)
+        {
+            options.HasFrameLimit = true;
+            options.FrameLimit = 180;
+        }
+
+        if (options.RuntimeTest && !options.HasFrameLimit)
+        {
+            options.HasFrameLimit = true;
+            options.FrameLimit = 120;
+        }
 
         const std::string engineName =
             std::string("Jevaing ") + Jevaing::GetVersion() + " - " + Jevaing::GetCodename();
+
+        const int windowWidth =
+            config && config->Width > 0
+                ? config->Width
+                : 1280;
+
+        const int windowHeight =
+            config && config->Height > 0
+                ? config->Height
+                : 720;
+
+        const std::string windowTitle =
+            config && !config->Title.empty()
+                ? config->Title
+                : engineName;
 
         Logger::Info(engineName);
         Logger::Info("Initializing engine...");
@@ -208,16 +269,10 @@ namespace Jevaing::Internal
             return 2;
         }
 
-        if (graphicsTestRequested && !options.HasFrameLimit)
-        {
-            options.HasFrameLimit = true;
-            options.FrameLimit = 180;
-        }
-
         WindowConfig windowConfig;
-        windowConfig.Title = engineName;
-        windowConfig.Width = WindowWidth;
-        windowConfig.Height = WindowHeight;
+        windowConfig.Title = windowTitle;
+        windowConfig.Width = windowWidth;
+        windowConfig.Height = windowHeight;
 
         std::unique_ptr<Window> window = Window::Create(windowConfig);
 
@@ -231,17 +286,26 @@ namespace Jevaing::Internal
 
         Logger::Info(
             "Window created: " +
-            std::to_string(WindowWidth) +
+            std::to_string(window->GetWidth()) +
             "x" +
-            std::to_string(WindowHeight)
+            std::to_string(window->GetHeight())
         );
 
         RendererConfig rendererConfig;
         rendererConfig.Backend = selectedBackend;
-        rendererConfig.TestPattern =
-            options.PenguinGraphicsTest
-                ? RendererTestPattern::Penguin
-                : RendererTestPattern::Triangle;
+
+        if (options.PenguinGraphicsTest)
+        {
+            rendererConfig.TestPattern = RendererTestPattern::Penguin;
+        }
+        else if (options.GraphicsTest || !game)
+        {
+            rendererConfig.TestPattern = RendererTestPattern::Triangle;
+        }
+        else
+        {
+            rendererConfig.TestPattern = RendererTestPattern::None;
+        }
 
         std::unique_ptr<Renderer> renderer = Renderer::Create(
             rendererConfig,
@@ -264,11 +328,16 @@ namespace Jevaing::Internal
 
         if (options.PenguinGraphicsTest)
         {
-            Logger::Info("ATLAS penguin graphics test enabled.");
+            Logger::Info("BIG BEAR GUMMY penguin graphics test enabled.");
         }
         else if (options.GraphicsTest)
         {
-            Logger::Info("ATLAS graphics test enabled: colored triangle pipeline smoke test.");
+            Logger::Info("BIG BEAR GUMMY triangle graphics test enabled.");
+        }
+
+        if (options.RuntimeTest)
+        {
+            Logger::Info("BIG BEAR GUMMY client runtime test enabled.");
         }
 
         if (options.HasFrameLimit)
@@ -280,7 +349,22 @@ namespace Jevaing::Internal
         }
         else
         {
-            Logger::Info("Press ESC or close the window to exit.");
+            Logger::Info("Use WASD/arrows in the Sandbox. Press ESC to exit.");
+        }
+
+        const bool clientMode = game != nullptr && !graphicsTestRequested;
+        bool gameStarted = false;
+
+        int lastWidth = window->GetWidth();
+        int lastHeight = window->GetHeight();
+
+        if (clientMode)
+        {
+            InputState::Reset();
+            game->OnStart();
+            gameStarted = true;
+            game->OnResize(lastWidth, lastHeight);
+            Logger::Info("Client Game callbacks initialized.");
         }
 
         Timer timer;
@@ -288,17 +372,69 @@ namespace Jevaing::Internal
         Logger::Info("Engine initialized.");
 
         std::uint64_t frameCount = 0;
+        std::uint64_t updateCalls = 0;
+        std::uint64_t renderCalls = 0;
+        int exitCode = 0;
 
-        while (window->ProcessEvents())
+        while (true)
         {
+            InputState::BeginFrame();
+
+            if (!window->ProcessEvents())
+            {
+                break;
+            }
+
+            const int currentWidth = window->GetWidth();
+            const int currentHeight = window->GetHeight();
+            const bool drawable = currentWidth > 0 && currentHeight > 0;
+
+            if (
+                drawable &&
+                (currentWidth != lastWidth || currentHeight != lastHeight)
+            )
+            {
+                if (!renderer->Resize(currentWidth, currentHeight))
+                {
+                    Logger::Error("Renderer resize failed.");
+                    exitCode = 1;
+                    break;
+                }
+
+                lastWidth = currentWidth;
+                lastHeight = currentHeight;
+
+                if (clientMode)
+                {
+                    game->OnResize(currentWidth, currentHeight);
+                }
+            }
+
             const double deltaTime = timer.Tick();
-            (void)deltaTime;
 
-            renderer->BeginFrame();
+            if (clientMode)
+            {
+                game->OnUpdate(deltaTime);
+                ++updateCalls;
+            }
 
-            // ATLAS 0.0.5: DirectX executes small built-in graphics tests.
+            if (drawable)
+            {
+                renderer->BeginFrame();
 
-            renderer->EndFrame();
+                if (clientMode)
+                {
+                    game->OnRender(*renderer);
+                    ++renderCalls;
+                }
+
+                renderer->EndFrame();
+            }
+            else
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(16));
+            }
+
             ++frameCount;
 
             if (options.HasFrameLimit && frameCount >= options.FrameLimit)
@@ -317,19 +453,42 @@ namespace Jevaing::Internal
             }
         }
 
-        if (options.PenguinGraphicsTest)
+        if (gameStarted)
         {
-            Logger::Info("[PASS] ATLAS penguin graphics test completed.");
+            game->OnStop();
+            InputState::Reset();
         }
-        else if (options.GraphicsTest)
+
+        if (exitCode == 0 && options.PenguinGraphicsTest)
         {
-            Logger::Info("[PASS] ATLAS graphics pipeline smoke test completed.");
+            Logger::Info("[PASS] BIG BEAR GUMMY penguin graphics test completed.");
+        }
+        else if (exitCode == 0 && options.GraphicsTest)
+        {
+            Logger::Info("[PASS] BIG BEAR GUMMY graphics pipeline smoke test completed.");
+        }
+
+        if (exitCode == 0 && options.RuntimeTest)
+        {
+            if (updateCalls > 0 && renderCalls > 0)
+            {
+                Logger::Info(
+                    "[PASS] BIG BEAR GUMMY client runtime callbacks completed."
+                );
+            }
+            else
+            {
+                Logger::Error(
+                    "[FAIL] BIG BEAR GUMMY client runtime callbacks were not exercised."
+                );
+                exitCode = 2;
+            }
         }
 
         Logger::Info("Shutting down...");
         Logger::Info("Goodbye.");
 
-        return 0;
+        return exitCode;
     }
 }
 
@@ -345,5 +504,17 @@ namespace Jevaing
     {
         Internal::Application application;
         return application.Run(argc, argv);
+    }
+
+    int Run(Game& game, const GameConfig& config)
+    {
+        Internal::Application application;
+        return application.Run(&game, &config, 0, nullptr);
+    }
+
+    int Run(Game& game, const GameConfig& config, int argc, char** argv)
+    {
+        Internal::Application application;
+        return application.Run(&game, &config, argc, argv);
     }
 }

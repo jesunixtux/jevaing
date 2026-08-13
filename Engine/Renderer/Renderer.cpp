@@ -23,11 +23,37 @@ namespace Jevaing::Internal
                 return true;
             }
 
+            bool Resize(int, int) override
+            {
+                return true;
+            }
+
             void BeginFrame() override
             {
             }
 
             void EndFrame() override
+            {
+            }
+
+            void Clear(const Color&) override
+            {
+            }
+
+            void DrawTriangle(
+                const Vec2&,
+                const Vec2&,
+                const Vec2&,
+                const Color&
+            ) override
+            {
+            }
+
+            void DrawQuad(
+                const Vec2&,
+                const Vec2&,
+                const Color&
+            ) override
             {
             }
 
@@ -47,14 +73,10 @@ namespace Jevaing::Internal
     {
         switch (backend)
         {
-            case RendererBackend::None:
-                return "None";
-            case RendererBackend::DirectX:
-                return "DirectX";
-            case RendererBackend::Vulkan:
-                return "Vulkan";
-            case RendererBackend::Metal:
-                return "Metal";
+            case RendererBackend::None: return "None";
+            case RendererBackend::DirectX: return "DirectX";
+            case RendererBackend::Vulkan: return "Vulkan";
+            case RendererBackend::Metal: return "Metal";
         }
 
         return "Unknown";

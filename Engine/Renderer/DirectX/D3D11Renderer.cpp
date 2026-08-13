@@ -4,8 +4,10 @@
 
 #include <d3dcompiler.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -16,22 +18,9 @@ namespace Jevaing::Internal
 {
     namespace
     {
-        struct Vertex
-        {
-            float Position[3];
-            float Color[4];
-        };
-
-        struct Color
-        {
-            float R;
-            float G;
-            float B;
-            float A;
-        };
-
         constexpr float Pi = 3.14159265358979323846f;
 
+        constexpr Color DefaultClear = { 0.025f, 0.040f, 0.065f, 1.0f };
         constexpr Color Black = { 0.035f, 0.045f, 0.060f, 1.0f };
         constexpr Color White = { 0.92f, 0.95f, 0.98f, 1.0f };
         constexpr Color Orange = { 1.0f, 0.52f, 0.10f, 1.0f };
@@ -63,7 +52,7 @@ float4 PSMain(VSOutput input) : SV_TARGET
 }
 )";
 
-        Vertex MakeVertex(float x, float y, const Color& color)
+        D3D11Vertex MakeVertex(float x, float y, const Color& color)
         {
             return {
                 { x, y, 0.0f },
@@ -71,8 +60,8 @@ float4 PSMain(VSOutput input) : SV_TARGET
             };
         }
 
-        void AppendTriangle(
-            std::vector<Vertex>& vertices,
+        void AppendTriangleVertices(
+            std::vector<D3D11Vertex>& vertices,
             float x0,
             float y0,
             float x1,
@@ -88,7 +77,7 @@ float4 PSMain(VSOutput input) : SV_TARGET
         }
 
         void AppendEllipse(
-            std::vector<Vertex>& vertices,
+            std::vector<D3D11Vertex>& vertices,
             float centerX,
             float centerY,
             float radiusX,
@@ -107,66 +96,43 @@ float4 PSMain(VSOutput input) : SV_TARGET
                     -2.0f * Pi * static_cast<float>(segment + 1) /
                     static_cast<float>(segments);
 
-                const float x0 = centerX + std::cos(angle0) * radiusX;
-                const float y0 = centerY + std::sin(angle0) * radiusY;
-                const float x1 = centerX + std::cos(angle1) * radiusX;
-                const float y1 = centerY + std::sin(angle1) * radiusY;
-
-                AppendTriangle(
+                AppendTriangleVertices(
                     vertices,
                     centerX,
                     centerY,
-                    x0,
-                    y0,
-                    x1,
-                    y1,
+                    centerX + std::cos(angle0) * radiusX,
+                    centerY + std::sin(angle0) * radiusY,
+                    centerX + std::cos(angle1) * radiusX,
+                    centerY + std::sin(angle1) * radiusY,
                     color
                 );
             }
         }
 
-        std::vector<Vertex> BuildTriangleVertices()
+        std::vector<D3D11Vertex> BuildTriangleVertices()
         {
             return {
-                {
-                    { 0.0f, 0.62f, 0.0f },
-                    { 1.0f, 0.25f, 0.16f, 1.0f }
-                },
-                {
-                    { 0.62f, -0.58f, 0.0f },
-                    { 0.15f, 0.72f, 1.0f, 1.0f }
-                },
-                {
-                    { -0.62f, -0.58f, 0.0f },
-                    { 0.35f, 1.0f, 0.35f, 1.0f }
-                }
+                MakeVertex(0.0f, 0.62f, { 1.0f, 0.25f, 0.16f, 1.0f }),
+                MakeVertex(0.62f, -0.58f, { 0.15f, 0.72f, 1.0f, 1.0f }),
+                MakeVertex(-0.62f, -0.58f, { 0.35f, 1.0f, 0.35f, 1.0f })
             };
         }
 
-        std::vector<Vertex> BuildPenguinVertices()
+        std::vector<D3D11Vertex> BuildPenguinVertices()
         {
-            std::vector<Vertex> vertices;
+            std::vector<D3D11Vertex> vertices;
             vertices.reserve(900);
 
-            // Feet are drawn first so the body naturally overlaps them.
             AppendEllipse(vertices, -0.19f, -0.77f, 0.18f, 0.075f, 24, Orange);
             AppendEllipse(vertices, 0.19f, -0.77f, 0.18f, 0.075f, 24, Orange);
-
-            // Main black silhouette.
             AppendEllipse(vertices, 0.0f, -0.08f, 0.46f, 0.70f, 40, Black);
             AppendEllipse(vertices, 0.0f, 0.46f, 0.39f, 0.36f, 36, Black);
-
-            // White belly.
             AppendEllipse(vertices, 0.0f, -0.16f, 0.29f, 0.46f, 36, White);
-
-            // Eyes and pupils.
             AppendEllipse(vertices, -0.13f, 0.53f, 0.075f, 0.090f, 24, White);
             AppendEllipse(vertices, 0.13f, 0.53f, 0.075f, 0.090f, 24, White);
             AppendEllipse(vertices, -0.13f, 0.53f, 0.030f, 0.042f, 20, Black);
             AppendEllipse(vertices, 0.13f, 0.53f, 0.030f, 0.042f, 20, Black);
-
-            // Beak. Winding matches the DirectX test geometry.
-            AppendTriangle(
+            AppendTriangleVertices(
                 vertices,
                 0.0f,
                 0.30f,
@@ -197,7 +163,7 @@ float4 PSMain(VSOutput input) : SV_TARGET
             const HRESULT result = D3DCompile(
                 ShaderSource,
                 sizeof(ShaderSource) - 1,
-                "JevaingAtlasShader",
+                "JevaingBigBearGummy2D",
                 nullptr,
                 nullptr,
                 entryPoint,
@@ -289,54 +255,23 @@ float4 PSMain(VSOutput input) : SV_TARGET
             return false;
         }
 
-        ID3D11Texture2D* backBuffer = nullptr;
-        const HRESULT bufferResult = m_swapChain->GetBuffer(
-            0,
-            __uuidof(ID3D11Texture2D),
-            reinterpret_cast<void**>(&backBuffer)
-        );
-
-        if (FAILED(bufferResult) || !backBuffer)
-        {
-            Logger::Error("DirectX 11 failed to acquire the swap-chain back buffer.");
-            ReleaseResources();
-            return false;
-        }
-
-        const HRESULT viewResult = m_device->CreateRenderTargetView(
-            backBuffer,
-            nullptr,
-            &m_renderTargetView
-        );
-
-        backBuffer->Release();
-
-        if (FAILED(viewResult) || !m_renderTargetView)
-        {
-            Logger::Error("DirectX 11 failed to create the render target view.");
-            ReleaseResources();
-            return false;
-        }
-
-        if (!CreateTestPipeline(hwnd))
+        if (!Create2DPipeline())
         {
             ReleaseResources();
             return false;
         }
 
-        const char* patternName =
-            m_testPattern == RendererTestPattern::Penguin ? "penguin" : "triangle";
+        if (!CreateRenderTarget(window.GetWidth(), window.GetHeight()))
+        {
+            ReleaseResources();
+            return false;
+        }
 
-        Logger::Info(
-            std::string("DirectX 11 device, swap chain and ATLAS ") +
-            patternName +
-            " pipeline initialized."
-        );
-
+        Logger::Info("DirectX 11 BIG BEAR GUMMY 2D pipeline initialized.");
         return true;
     }
 
-    bool D3D11Renderer::CreateTestPipeline(HWND hwnd)
+    bool D3D11Renderer::Create2DPipeline()
     {
         ID3DBlob* vertexShaderBlob = nullptr;
         ID3DBlob* pixelShaderBlob = nullptr;
@@ -359,14 +294,6 @@ float4 PSMain(VSOutput input) : SV_TARGET
             &m_vertexShader
         );
 
-        if (FAILED(vertexShaderResult) || !m_vertexShader)
-        {
-            Logger::Error("DirectX 11 failed to create the ATLAS vertex shader.");
-            pixelShaderBlob->Release();
-            vertexShaderBlob->Release();
-            return false;
-        }
-
         const HRESULT pixelShaderResult = m_device->CreatePixelShader(
             pixelShaderBlob->GetBufferPointer(),
             pixelShaderBlob->GetBufferSize(),
@@ -374,32 +301,16 @@ float4 PSMain(VSOutput input) : SV_TARGET
             &m_pixelShader
         );
 
-        if (FAILED(pixelShaderResult) || !m_pixelShader)
-        {
-            Logger::Error("DirectX 11 failed to create the ATLAS pixel shader.");
-            pixelShaderBlob->Release();
-            vertexShaderBlob->Release();
-            return false;
-        }
-
         const D3D11_INPUT_ELEMENT_DESC inputElements[] = {
             {
-                "POSITION",
-                0,
-                DXGI_FORMAT_R32G32B32_FLOAT,
-                0,
-                static_cast<UINT>(offsetof(Vertex, Position)),
-                D3D11_INPUT_PER_VERTEX_DATA,
-                0
+                "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
+                static_cast<UINT>(offsetof(D3D11Vertex, Position)),
+                D3D11_INPUT_PER_VERTEX_DATA, 0
             },
             {
-                "COLOR",
-                0,
-                DXGI_FORMAT_R32G32B32A32_FLOAT,
-                0,
-                static_cast<UINT>(offsetof(Vertex, Color)),
-                D3D11_INPUT_PER_VERTEX_DATA,
-                0
+                "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0,
+                static_cast<UINT>(offsetof(D3D11Vertex, Color)),
+                D3D11_INPUT_PER_VERTEX_DATA, 0
             }
         };
 
@@ -414,99 +325,277 @@ float4 PSMain(VSOutput input) : SV_TARGET
         pixelShaderBlob->Release();
         vertexShaderBlob->Release();
 
-        if (FAILED(inputLayoutResult) || !m_inputLayout)
+        if (
+            FAILED(vertexShaderResult) ||
+            FAILED(pixelShaderResult) ||
+            FAILED(inputLayoutResult) ||
+            !m_vertexShader ||
+            !m_pixelShader ||
+            !m_inputLayout
+        )
         {
-            Logger::Error("DirectX 11 failed to create the ATLAS input layout.");
+            Logger::Error("DirectX 11 failed to create the BIG BEAR GUMMY shader pipeline.");
             return false;
         }
 
-        const std::vector<Vertex> vertices =
-            m_testPattern == RendererTestPattern::Penguin
-                ? BuildPenguinVertices()
-                : BuildTriangleVertices();
+        return EnsureVertexCapacity(256);
+    }
 
-        if (vertices.empty())
+    bool D3D11Renderer::CreateRenderTarget(int width, int height)
+    {
+        if (!m_swapChain || !m_device || width <= 0 || height <= 0)
         {
-            Logger::Error("ATLAS test geometry contains no vertices.");
             return false;
         }
 
-        m_vertexCount = static_cast<UINT>(vertices.size());
-
-        D3D11_BUFFER_DESC vertexBufferDesc = {};
-        vertexBufferDesc.ByteWidth = static_cast<UINT>(vertices.size() * sizeof(Vertex));
-        vertexBufferDesc.Usage = D3D11_USAGE_IMMUTABLE;
-        vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-
-        D3D11_SUBRESOURCE_DATA vertexData = {};
-        vertexData.pSysMem = vertices.data();
-
-        const HRESULT vertexBufferResult = m_device->CreateBuffer(
-            &vertexBufferDesc,
-            &vertexData,
-            &m_vertexBuffer
+        ID3D11Texture2D* backBuffer = nullptr;
+        const HRESULT bufferResult = m_swapChain->GetBuffer(
+            0,
+            __uuidof(ID3D11Texture2D),
+            reinterpret_cast<void**>(&backBuffer)
         );
 
-        if (FAILED(vertexBufferResult) || !m_vertexBuffer)
+        if (FAILED(bufferResult) || !backBuffer)
         {
-            Logger::Error("DirectX 11 failed to create the ATLAS vertex buffer.");
+            Logger::Error("DirectX 11 failed to acquire the swap-chain back buffer.");
             return false;
         }
 
-        RECT clientRect = {};
+        const HRESULT viewResult = m_device->CreateRenderTargetView(
+            backBuffer,
+            nullptr,
+            &m_renderTargetView
+        );
+        backBuffer->Release();
 
-        if (!GetClientRect(hwnd, &clientRect))
+        if (FAILED(viewResult) || !m_renderTargetView)
         {
-            Logger::Error("DirectX 11 failed to query the Win32 client area for the viewport.");
-            return false;
-        }
-
-        const LONG clientWidth = clientRect.right - clientRect.left;
-        const LONG clientHeight = clientRect.bottom - clientRect.top;
-
-        if (clientWidth <= 0 || clientHeight <= 0)
-        {
-            Logger::Error("DirectX 11 received an invalid viewport size.");
+            Logger::Error("DirectX 11 failed to create the render target view.");
             return false;
         }
 
         m_viewport.TopLeftX = 0.0f;
         m_viewport.TopLeftY = 0.0f;
-        m_viewport.Width = static_cast<float>(clientWidth);
-        m_viewport.Height = static_cast<float>(clientHeight);
+        m_viewport.Width = static_cast<float>(width);
+        m_viewport.Height = static_cast<float>(height);
         m_viewport.MinDepth = 0.0f;
         m_viewport.MaxDepth = 1.0f;
 
         return true;
     }
 
+    bool D3D11Renderer::Resize(int width, int height)
+    {
+        if (width <= 0 || height <= 0)
+        {
+            return true;
+        }
+
+        if (!m_swapChain || !m_context)
+        {
+            return false;
+        }
+
+        m_context->OMSetRenderTargets(0, nullptr, nullptr);
+
+        if (m_renderTargetView)
+        {
+            m_renderTargetView->Release();
+            m_renderTargetView = nullptr;
+        }
+
+        const HRESULT resizeResult = m_swapChain->ResizeBuffers(
+            0,
+            static_cast<UINT>(width),
+            static_cast<UINT>(height),
+            DXGI_FORMAT_UNKNOWN,
+            0
+        );
+
+        if (FAILED(resizeResult))
+        {
+            Logger::Error("DirectX 11 failed to resize the swap chain.");
+            return false;
+        }
+
+        return CreateRenderTarget(width, height);
+    }
+
+    bool D3D11Renderer::EnsureVertexCapacity(std::size_t requiredVertices)
+    {
+        if (requiredVertices <= m_vertexCapacity && m_vertexBuffer)
+        {
+            return true;
+        }
+
+        std::size_t newCapacity = std::max<std::size_t>(256, m_vertexCapacity);
+
+        while (newCapacity < requiredVertices)
+        {
+            newCapacity *= 2;
+        }
+
+        if (m_vertexBuffer)
+        {
+            m_vertexBuffer->Release();
+            m_vertexBuffer = nullptr;
+        }
+
+        D3D11_BUFFER_DESC bufferDesc = {};
+        bufferDesc.ByteWidth = static_cast<UINT>(newCapacity * sizeof(D3D11Vertex));
+        bufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+        bufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+        bufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+        const HRESULT result = m_device->CreateBuffer(
+            &bufferDesc,
+            nullptr,
+            &m_vertexBuffer
+        );
+
+        if (FAILED(result) || !m_vertexBuffer)
+        {
+            Logger::Error("DirectX 11 failed to allocate the dynamic 2D vertex buffer.");
+            m_vertexCapacity = 0;
+            return false;
+        }
+
+        m_vertexCapacity = newCapacity;
+        return true;
+    }
+
     void D3D11Renderer::BeginFrame()
     {
-        if (
-            !m_context ||
-            !m_renderTargetView ||
-            !m_vertexShader ||
-            !m_pixelShader ||
-            !m_inputLayout ||
-            !m_vertexBuffer ||
-            m_vertexCount == 0
-        )
+        m_frameVertices.clear();
+
+        if (!m_context || !m_renderTargetView)
         {
             return;
         }
 
-        constexpr float clearColor[4] = {
-            0.035f,
-            0.055f,
-            0.085f,
-            1.0f
+        m_context->OMSetRenderTargets(1, &m_renderTargetView, nullptr);
+        m_context->RSSetViewports(1, &m_viewport);
+        Clear(DefaultClear);
+        AppendTestPattern();
+    }
+
+    void D3D11Renderer::EndFrame()
+    {
+        FlushDrawCommands();
+
+        if (m_swapChain)
+        {
+            m_swapChain->Present(1, 0);
+        }
+    }
+
+    void D3D11Renderer::Clear(const Color& color)
+    {
+        if (!m_context || !m_renderTargetView)
+        {
+            return;
+        }
+
+        const float clearColor[4] = {
+            color.R,
+            color.G,
+            color.B,
+            color.A
         };
 
-        m_context->OMSetRenderTargets(1, &m_renderTargetView, nullptr);
         m_context->ClearRenderTargetView(m_renderTargetView, clearColor);
-        m_context->RSSetViewports(1, &m_viewport);
+    }
 
-        constexpr UINT stride = sizeof(Vertex);
+    void D3D11Renderer::DrawTriangle(
+        const Vec2& a,
+        const Vec2& b,
+        const Vec2& c,
+        const Color& color
+    )
+    {
+        m_frameVertices.push_back(MakeVertex(a.X, a.Y, color));
+        m_frameVertices.push_back(MakeVertex(b.X, b.Y, color));
+        m_frameVertices.push_back(MakeVertex(c.X, c.Y, color));
+    }
+
+    void D3D11Renderer::DrawQuad(
+        const Vec2& center,
+        const Vec2& size,
+        const Color& color
+    )
+    {
+        const float halfWidth = size.X * 0.5f;
+        const float halfHeight = size.Y * 0.5f;
+
+        const Vec2 topLeft = { center.X - halfWidth, center.Y + halfHeight };
+        const Vec2 topRight = { center.X + halfWidth, center.Y + halfHeight };
+        const Vec2 bottomRight = { center.X + halfWidth, center.Y - halfHeight };
+        const Vec2 bottomLeft = { center.X - halfWidth, center.Y - halfHeight };
+
+        DrawTriangle(topLeft, topRight, bottomRight, color);
+        DrawTriangle(topLeft, bottomRight, bottomLeft, color);
+    }
+
+    void D3D11Renderer::AppendTestPattern()
+    {
+        std::vector<D3D11Vertex> vertices;
+
+        switch (m_testPattern)
+        {
+            case RendererTestPattern::None:
+                return;
+
+            case RendererTestPattern::Triangle:
+                vertices = BuildTriangleVertices();
+                break;
+
+            case RendererTestPattern::Penguin:
+                vertices = BuildPenguinVertices();
+                break;
+        }
+
+        m_frameVertices.insert(
+            m_frameVertices.end(),
+            vertices.begin(),
+            vertices.end()
+        );
+    }
+
+    void D3D11Renderer::FlushDrawCommands()
+    {
+        if (m_frameVertices.empty() || !m_context)
+        {
+            return;
+        }
+
+        if (!EnsureVertexCapacity(m_frameVertices.size()))
+        {
+            return;
+        }
+
+        D3D11_MAPPED_SUBRESOURCE mapped = {};
+        const HRESULT mapResult = m_context->Map(
+            m_vertexBuffer,
+            0,
+            D3D11_MAP_WRITE_DISCARD,
+            0,
+            &mapped
+        );
+
+        if (FAILED(mapResult) || !mapped.pData)
+        {
+            Logger::Error("DirectX 11 failed to map the dynamic 2D vertex buffer.");
+            return;
+        }
+
+        std::memcpy(
+            mapped.pData,
+            m_frameVertices.data(),
+            m_frameVertices.size() * sizeof(D3D11Vertex)
+        );
+        m_context->Unmap(m_vertexBuffer, 0);
+
+        constexpr UINT stride = sizeof(D3D11Vertex);
         constexpr UINT offset = 0;
 
         m_context->IASetInputLayout(m_inputLayout);
@@ -514,15 +603,7 @@ float4 PSMain(VSOutput input) : SV_TARGET
         m_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         m_context->VSSetShader(m_vertexShader, nullptr, 0);
         m_context->PSSetShader(m_pixelShader, nullptr, 0);
-        m_context->Draw(m_vertexCount, 0);
-    }
-
-    void D3D11Renderer::EndFrame()
-    {
-        if (m_swapChain)
-        {
-            m_swapChain->Present(1, 0);
-        }
+        m_context->Draw(static_cast<UINT>(m_frameVertices.size()), 0);
     }
 
     const char* D3D11Renderer::GetName() const
@@ -541,8 +622,6 @@ float4 PSMain(VSOutput input) : SV_TARGET
         {
             m_context->ClearState();
         }
-
-        m_vertexCount = 0;
 
         if (m_vertexBuffer)
         {
@@ -591,6 +670,9 @@ float4 PSMain(VSOutput input) : SV_TARGET
             m_device->Release();
             m_device = nullptr;
         }
+
+        m_vertexCapacity = 0;
+        m_frameVertices.clear();
     }
 }
 

@@ -4,6 +4,8 @@
 
 #include <string>
 
+#include "../../Core/InputState.h"
+
 namespace
 {
     std::wstring Utf8ToWide(const std::string& text)
@@ -44,6 +46,25 @@ namespace
         }
 
         return result;
+    }
+
+    bool TryMapKey(WPARAM virtualKey, Jevaing::Key& key)
+    {
+        switch (virtualKey)
+        {
+            case 'W': key = Jevaing::Key::W; return true;
+            case 'A': key = Jevaing::Key::A; return true;
+            case 'S': key = Jevaing::Key::S; return true;
+            case 'D': key = Jevaing::Key::D; return true;
+            case VK_UP: key = Jevaing::Key::Up; return true;
+            case VK_DOWN: key = Jevaing::Key::Down; return true;
+            case VK_LEFT: key = Jevaing::Key::Left; return true;
+            case VK_RIGHT: key = Jevaing::Key::Right; return true;
+            case VK_SPACE: key = Jevaing::Key::Space; return true;
+            case VK_RETURN: key = Jevaing::Key::Enter; return true;
+            case VK_ESCAPE: key = Jevaing::Key::Escape; return true;
+            default: return false;
+        }
     }
 }
 
@@ -103,12 +124,7 @@ namespace Jevaing::Platform
             m_classRegistered = true;
         }
 
-        RECT windowRect = {
-            0,
-            0,
-            config.Width,
-            config.Height
-        };
+        RECT windowRect = { 0, 0, config.Width, config.Height };
 
         if (!AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE))
         {
@@ -167,6 +183,32 @@ namespace Jevaing::Platform
         return static_cast<void*>(m_window);
     }
 
+    int WindowsWindow::GetWidth() const
+    {
+        if (!m_window)
+        {
+            return 0;
+        }
+
+        RECT clientRect = {};
+        return GetClientRect(m_window, &clientRect)
+            ? clientRect.right - clientRect.left
+            : 0;
+    }
+
+    int WindowsWindow::GetHeight() const
+    {
+        if (!m_window)
+        {
+            return 0;
+        }
+
+        RECT clientRect = {};
+        return GetClientRect(m_window, &clientRect)
+            ? clientRect.bottom - clientRect.top
+            : 0;
+    }
+
     LRESULT CALLBACK WindowsWindow::WindowProc(
         HWND hwnd,
         UINT message,
@@ -178,6 +220,13 @@ namespace Jevaing::Platform
         {
             case WM_KEYDOWN:
             {
+                Jevaing::Key key;
+
+                if (TryMapKey(wParam, key))
+                {
+                    Internal::InputState::SetKeyState(key, true);
+                }
+
                 if (wParam == VK_ESCAPE)
                 {
                     DestroyWindow(hwnd);
@@ -185,6 +234,24 @@ namespace Jevaing::Platform
                 }
 
                 break;
+            }
+
+            case WM_KEYUP:
+            {
+                Jevaing::Key key;
+
+                if (TryMapKey(wParam, key))
+                {
+                    Internal::InputState::SetKeyState(key, false);
+                }
+
+                break;
+            }
+
+            case WM_KILLFOCUS:
+            {
+                Internal::InputState::Reset();
+                return 0;
             }
 
             case WM_CLOSE:

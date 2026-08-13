@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 project(
     Jevaing
-    VERSION 0.0.5
+    VERSION 0.0.6
     LANGUAGES CXX
 )
 
@@ -17,6 +17,7 @@ add_subdirectory(Api)
 add_library(JevaingEngine STATIC
     Engine/Core/Application.cpp
     Engine/Core/CommandLine.cpp
+    Engine/Core/Input.cpp
     Engine/Core/Logger.cpp
     Engine/Core/Timer.cpp
     Engine/Core/Version.cpp
@@ -56,7 +57,7 @@ target_link_libraries(JevaingEngine
         JevaingApi
 )
 
-# Sandbox used to validate the engine
+# Sandbox is now a real client of the public API.
 add_executable(JevaingSandbox
     Sandbox/main.cpp
 )

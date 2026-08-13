@@ -2,99 +2,437 @@
 
 Jevaing is an experimental open-source graphics and game engine written in C++.
 
-The project is built step by step with a small, understandable core, platform-specific code behind abstractions, and no mandatory dependency on a store, account system, online service, or vendor platform.
+The project is being built step by step with a small core, platform-specific code behind abstractions, renderer-specific code behind a common interface, and no mandatory dependency on a store, account system, launcher or online service.
 
-> **Current version:** `0.0.5`
+> **Current version:** `0.0.6`
 >
-> **Codename:** `ATLAS`
+> **Codename:** `BIG BEAR GUMMY`
 >
 > **Status:** early prototype — not production ready.
 
-## What works today
+## What 0.0.6 changes
 
-Jevaing 0.0.5 ATLAS currently provides a small but functional engine foundation on Windows:
+BIG BEAR GUMMY is the first Jevaing version aimed at being a base for writing an actual client program instead of only proving that individual engine subsystems work.
+
+The `Sandbox` is now a real client of the public Jevaing API. It subclasses `Jevaing::Game`, receives update/render callbacks, reads keyboard input and submits simple 2D drawing commands without touching Win32 or Direct3D directly.
+
+The current Windows build provides:
 
 - C++17 core.
 - CMake build system.
-- Minimal public Jevaing API.
+- Public `Game` lifecycle API.
+- Public `GameConfig` window configuration.
+- `OnStart`, `OnUpdate`, `OnRender`, `OnResize` and `OnStop` callbacks.
 - Generic engine-facing window abstraction.
-- Platform window factory.
-- Native Win32 window implementation hidden behind the generic window API.
-- UTF-8 window titles converted internally to Win32 UTF-16.
-- Native Windows event loop.
-- Window move, resize, minimize and maximize support.
-- Exit through the close button or `ESC`.
-- Logger with info, warning and error levels.
-- Engine timer based on `std::chrono::steady_clock`.
-- Delta-time measurement.
-- Generic renderer interface.
-- Renderer-independent `BeginFrame()` / `EndFrame()` boundaries.
-- Null Renderer for architecture and fallback testing.
-- **DirectX 11 renderer on Windows.**
-- DirectX 11 device, swap chain and render-target creation.
-- Runtime HLSL shader compilation.
-- Vertex shader and pixel shader creation.
-- Input layout and immutable vertex buffer.
-- Viewport setup.
-- **First GPU triangle rendered by Jevaing.**
-- Command-line test interface.
-- Headless core self-tests that do not open a window.
-- Automatic frame-limited runs for repeatable renderer tests.
-- `--graphics-test` GPU pipeline smoke test.
+- Native Win32 window implementation.
+- Keyboard input state for WASD, arrows, Space, Enter and Escape.
+- `IsKeyDown`, `IsKeyPressed` and `IsKeyReleased` queries.
+- Engine timer and delta time.
+- Generic renderer abstraction.
+- Null Renderer for architecture/testing work.
+- DirectX 11 renderer on Windows.
+- Runtime HLSL compilation.
+- Dynamic 2D vertex buffer.
+- Immediate colored triangle and quad drawing through the public API.
+- Swap-chain/render-target recreation when the client area changes size.
+- Existing ATLAS triangle and penguin graphics tests.
+- Headless core self-tests.
+- Fixed-frame smoke tests suitable for scripts and future CI.
+- An interactive Sandbox demo built only on the public Jevaing API.
 
-Vulkan and Metal are represented in the renderer API but are **not implemented yet**.
+Vulkan, Metal, Linux and macOS are still planned rather than implemented.
 
-Linux and macOS platform implementations are also planned but are not functional yet.
+## Why BIG BEAR GUMMY matters
 
-## 0.0.5 ATLAS goal
-
-ATLAS is the first Jevaing version that sends its own geometry through a real graphics pipeline.
-
-The Windows graphics path is now:
+Before 0.0.6 the main execution path was primarily an engine bring-up path:
 
 ```text
-Sandbox
-   |
-   v
-Jevaing::Run(argc, argv)
-   |
-   v
 Application
-  /     \
- v       v
-Window  Renderer
- |        |
- v        v
-Win32   DirectX 11
-          |
-          v
-      HLSL shaders
-          |
-          v
-     Vertex buffer
-          |
-          v
-     Draw(3, 0)
-          |
-          v
-     Colored triangle
+    |
+    +---- Window
+    |
+    +---- Renderer
+             |
+             +---- built-in graphics test
 ```
 
-The triangle is intentionally simple. It is renderer bring-up geometry, not yet a public mesh or draw-command API. Its purpose is to prove that the complete DirectX 11 path works from Jevaing's engine loop to the GPU.
+BIG BEAR GUMMY introduces a client layer:
+
+```text
+Sandbox Game
+     |
+     v
+Jevaing public API
+     |
+     v
+Application runtime
+  /      |       \
+ v       v        v
+Input   Game    Graphics2D
+ |       |        |
+ v       v        v
+Win32  callbacks Renderer
+                 |
+                 v
+             DirectX 11
+```
+
+A client can now own its state, update it with `deltaTime`, read input and submit simple graphics commands without including Windows or DirectX headers.
+
+That is intentionally still a small API. The goal is to establish a usable foundation before adding scenes, entities, textures, audio or an editor.
+
+## Interactive Sandbox
+
+Build and run Jevaing normally:
+
+```powershell
+git clone https://github.com/jesunixtux/jevaing.git
+cd jevaing
+cmake -S . -B build
+cmake --build build --config Debug
+.\bin\Debug\JevaingSandbox.exe
+```
+
+The default Sandbox should open a window titled:
+
+```text
+Jevaing 0.0.6 - BIG BEAR GUMMY Sandbox
+```
+
+It displays a small blocky gummy bear built from public `DrawQuad` calls.
+
+Controls:
+
+| Input | Action |
+|---|---|
+| `WASD` | Move the gummy bear |
+| Arrow keys | Move the gummy bear |
+| `Space` | Change the gummy bear color while held |
+| `ESC` | Close the window |
+
+The demo is deliberately simple. Its purpose is to prove this path:
+
+```text
+Sandbox state
+    -> OnUpdate(deltaTime)
+    -> Jevaing::Input
+    -> OnRender(Graphics2D&)
+    -> DrawQuad / DrawTriangle
+    -> DirectX 11
+    -> GPU
+```
+
+## Public client API
+
+The current client-facing structure is intentionally small.
+
+A minimal client can look like this:
+
+```cpp
+#include <Jevaing/Jevaing.h>
+
+class MyGame final : public Jevaing::Game
+{
+public:
+    void OnUpdate(double deltaTime) override
+    {
+        if (Jevaing::Input::IsKeyDown(Jevaing::Key::D))
+        {
+            x += static_cast<float>(deltaTime);
+        }
+    }
+
+    void OnRender(Jevaing::Graphics2D& graphics) override
+    {
+        graphics.Clear({ 0.02f, 0.03f, 0.05f, 1.0f });
+
+        graphics.DrawQuad(
+            { x, 0.0f },
+            { 0.20f, 0.20f },
+            { 1.0f, 0.45f, 0.15f, 1.0f }
+        );
+    }
+
+private:
+    float x = 0.0f;
+};
+
+int main(int argc, char** argv)
+{
+    MyGame game;
+
+    Jevaing::GameConfig config;
+    config.Title = "My Jevaing Game";
+    config.Width = 1280;
+    config.Height = 720;
+
+    return Jevaing::Run(game, config, argc, argv);
+}
+```
+
+The public API currently includes:
+
+```text
+Jevaing::Game
+Jevaing::GameConfig
+Jevaing::Graphics2D
+Jevaing::Vec2
+Jevaing::Color
+Jevaing::Key
+Jevaing::Input
+Jevaing::Run(...)
+Jevaing::GetVersion()
+Jevaing::GetCodename()
+```
+
+These APIs may change while Jevaing is below version 1.0.
+
+## Game lifecycle
+
+A client `Game` can override:
+
+```cpp
+void OnStart();
+void OnUpdate(double deltaTime);
+void OnRender(Jevaing::Graphics2D& graphics);
+void OnResize(int width, int height);
+void OnStop();
+```
+
+The normal runtime order is approximately:
+
+```text
+create Window
+create Renderer
+OnStart
+OnResize(initial size)
+
+loop:
+    snapshot Input
+    process platform events
+    resize renderer if needed
+    OnResize if needed
+    calculate deltaTime
+    OnUpdate(deltaTime)
+    BeginFrame
+    OnRender(Graphics2D)
+    EndFrame / Present
+
+OnStop
+```
+
+## Input foundation
+
+BIG BEAR GUMMY exposes basic keyboard state through:
+
+```cpp
+Jevaing::Input::IsKeyDown(key);
+Jevaing::Input::IsKeyPressed(key);
+Jevaing::Input::IsKeyReleased(key);
+```
+
+Currently mapped keys:
+
+```text
+W A S D
+Up Down Left Right
+Space
+Enter
+Escape
+```
+
+The Win32 backend owns the platform key-message translation. Client code only sees `Jevaing::Key`.
+
+Mouse/gamepad input is not implemented yet.
+
+## Graphics2D foundation
+
+The public renderer-facing 2D API currently supports:
+
+```cpp
+graphics.Clear(color);
+graphics.DrawTriangle(a, b, c, color);
+graphics.DrawQuad(center, size, color);
+```
+
+Coordinates currently use normalized device-style coordinates:
+
+```text
+(-1, +1)                (+1, +1)
+     +--------------------+
+     |                    |
+     |       (0,0)        |
+     |                    |
+     +--------------------+
+(-1, -1)                (+1, -1)
+```
+
+This is a temporary low-level coordinate convention. A future camera/2D world system should sit above it rather than forcing game code to live permanently in normalized coordinates.
+
+`Graphics2D` is backend-neutral. The current implementation is DirectX 11, but client code does not include D3D11 types.
+
+### Dynamic geometry
+
+BIG BEAR GUMMY replaces the fixed ATLAS triangle vertex buffer with a dynamic 2D vertex buffer.
+
+Each frame can submit multiple triangles/quads. The DirectX backend grows its dynamic buffer when the current capacity is insufficient, uploads the frame vertices and performs the draw call before presenting the swap chain.
+
+This is still an immediate-mode prototype, not a final batching or material system.
+
+## Window resizing
+
+The generic `Window` interface can now report the current client width/height.
+
+When the Win32 client area changes size, the runtime detects the new dimensions and asks the renderer to resize. The DirectX 11 backend releases its old render-target view, resizes the swap-chain buffers, recreates the render target and updates the viewport.
+
+Client games receive `OnResize(width, height)` after a successful renderer resize.
+
+This is an important foundation for future cameras, UI and resolution handling.
+
+## Command-line testing
+
+The command-line testing introduced in ARPA+ remains available.
+
+### Help
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --help
+```
+
+### Version
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --version
+```
+
+Expected:
+
+```text
+Jevaing 0.0.6 - BIG BEAR GUMMY
+```
+
+### Headless core tests
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --self-test
+$LASTEXITCODE
+```
+
+A healthy run returns `0`.
+
+The self-test currently validates the version/codename, timer, renderer parsing/availability, initial input state and default `GameConfig` dimensions.
+
+### Renderer information
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --renderer-info
+```
+
+Expected on Windows:
+
+```text
+None: available
+DirectX: available
+Vulkan: not available
+Metal: not available
+Default renderer: DirectX
+```
+
+### Triangle graphics test
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --graphics-test
+```
+
+### Penguin graphics test
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --graphics-test-penguin
+```
+
+### Client runtime smoke test
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --runtime-test
+```
+
+This opens the real Sandbox client, exercises its `OnUpdate` and `OnRender` callbacks for 120 frames and exits automatically.
+
+A healthy run ends with:
+
+```text
+[PASS] BIG BEAR GUMMY client runtime callbacks completed.
+```
+
+### Fixed frame count
+
+Any normal client run can also be bounded:
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --frames 300
+```
+
+or:
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --runtime-test --frames 600
+```
+
+### Force a renderer
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --renderer directx
+.\bin\Debug\JevaingSandbox.exe --renderer null --frames 60
+```
+
+Unavailable backends fail explicitly rather than silently falling back:
+
+```powershell
+.\bin\Debug\JevaingSandbox.exe --renderer vulkan
+```
+
+## Dependencies
+
+### Required on Windows
+
+- CMake 3.20 or newer.
+- C++17-compatible compiler.
+- Windows SDK.
+- MSVC / Visual Studio Build Tools or another compatible Windows C++ toolchain.
+- Git is recommended.
+
+### Windows libraries
+
+The current Windows implementation links system libraries only:
+
+```text
+user32
+gdi32
+d3d11
+dxgi
+d3dcompiler
+```
+
+There is currently no SDL, GLFW, Qt, DirectXTK or third-party engine/runtime dependency.
 
 ## Repository structure
 
 ```text
 jevaing/
 ├── Api/
-│   └── Include/
-│       └── Jevaing/
-│           └── Jevaing.h
+│   └── Include/Jevaing/
+│       ├── Game.h
+│       ├── Graphics2D.h
+│       ├── Input.h
+│       ├── Jevaing.h
+│       └── Types.h
 │
 ├── Engine/
 │   ├── Core/
 │   │   ├── Application.*
 │   │   ├── CommandLine.*
+│   │   ├── Input.*
+│   │   ├── InputState.h
 │   │   ├── Logger.*
 │   │   ├── Timer.*
 │   │   ├── Version.*
@@ -112,225 +450,21 @@ jevaing/
 │       ├── Vulkan/      # planned
 │       └── Metal/       # planned
 │
-├── Library/
 ├── Sandbox/
-├── bin/
+│   └── main.cpp
 ├── CMakeLists.txt
 ├── LICENSE
 └── README.md
 ```
 
-## Dependencies
-
-### Required to build ATLAS on Windows
-
-- **CMake 3.20 or newer**.
-- A **C++17-compatible compiler**.
-- **Windows SDK** with Win32 and Direct3D 11 development files.
-- A Windows C++ toolchain such as **MSVC / Visual Studio Build Tools**.
-- Git is recommended.
-
-### Windows libraries currently linked
-
-Jevaing currently uses Windows-provided libraries only:
-
-- `user32`
-- `gdi32`
-- `d3d11`
-- `dxgi`
-- `d3dcompiler`
-
-`d3dcompiler` is used by ATLAS to compile the small embedded HLSL bring-up shader at runtime.
-
-No SDL, GLFW, Qt, DirectXTK, third-party game engine or third-party runtime is required.
-
-## Building on Windows
-
-Clone the repository:
-
-```powershell
-git clone https://github.com/jesunixtux/jevaing.git
-cd jevaing
-```
-
-Generate build files:
-
-```powershell
-cmake -S . -B build
-```
-
-Build Debug:
-
-```powershell
-cmake --build build --config Debug
-```
-
-Run normally:
-
-```powershell
-.\bin\Debug\JevaingSandbox.exe
-```
-
-The window title should be:
-
-```text
-Jevaing 0.0.5 - ATLAS
-```
-
-On Windows with the DirectX backend, the window should show a colored triangle over a dark blue background.
-
-The console should include lines similar to:
-
-```text
-[Jevaing][INFO] DirectX 11 device, swap chain and ATLAS triangle pipeline initialized.
-[Jevaing][INFO] Renderer initialized: DirectX 11 Renderer [DirectX]
-[Jevaing][INFO] Engine initialized.
-```
-
-## Command-line testing
-
-ATLAS keeps the ARPA+ command-line test interface and adds a graphics-pipeline smoke test.
-
-### Show available commands
-
-```powershell
-.\bin\Debug\JevaingSandbox.exe --help
-```
-
-### Print the current version
-
-```powershell
-.\bin\Debug\JevaingSandbox.exe --version
-```
-
-Expected:
-
-```text
-Jevaing 0.0.5 - ATLAS
-```
-
-### Run core self-tests
-
-```powershell
-.\bin\Debug\JevaingSandbox.exe --self-test
-```
-
-This does **not** open a window. A healthy run returns exit code `0`.
-
-### Inspect renderer availability
-
-```powershell
-.\bin\Debug\JevaingSandbox.exe --renderer-info
-```
-
-On the current Windows build, the expected state is approximately:
-
-```text
-None: available
-DirectX: available
-Vulkan: not available
-Metal: not available
-Default renderer: DirectX
-```
-
-### Run the ATLAS graphics smoke test
-
-```powershell
-.\bin\Debug\JevaingSandbox.exe --graphics-test
-```
-
-On Windows this selects the default DirectX renderer, creates the complete ATLAS shader/input-layout/vertex-buffer pipeline, renders the colored triangle for 180 frames and exits automatically.
-
-A successful run ends with:
-
-```text
-[Jevaing][INFO] [PASS] ATLAS graphics pipeline smoke test completed.
-```
-
-You can inspect the exit code with:
-
-```powershell
-$LASTEXITCODE
-```
-
-Expected after a successful graphics test:
-
-```text
-0
-```
-
-You can override the frame count:
-
-```powershell
-.\bin\Debug\JevaingSandbox.exe --graphics-test --frames 600
-```
-
-### Force DirectX 11
-
-```powershell
-.\bin\Debug\JevaingSandbox.exe --renderer directx
-```
-
-Aliases accepted for this backend include `dx11` and `d3d11`.
-
-### Force the Null Renderer
-
-```powershell
-.\bin\Debug\JevaingSandbox.exe --renderer null
-```
-
-The Null Renderer performs no GPU rendering and remains useful for testing the platform/event-loop layer independently.
-
-`--graphics-test` intentionally rejects the Null Renderer because the graphics smoke test must exercise a real GPU backend.
-
-### Run a fixed number of frames
-
-```powershell
-.\bin\Debug\JevaingSandbox.exe --renderer directx --frames 300
-```
-
-Jevaing opens the window, renders 300 frames, shuts down and returns control to PowerShell automatically.
-
-### Test an unavailable backend
-
-```powershell
-.\bin\Debug\JevaingSandbox.exe --renderer vulkan
-```
-
-ATLAS should fail explicitly and return a non-zero exit code instead of silently falling back.
-
-## Release build
-
-```powershell
-cmake --build build --config Release
-```
-
-The executable is placed in:
-
-```text
-bin/Release/
-```
-
 ## Renderer backends
 
-| Backend | Status | Notes |
+| Backend | Status | Current capability |
 |---|---|---|
-| Null | Working | No GPU work; architecture/testing backend |
-| DirectX 11 | Working prototype | Device + swap chain + shaders + vertex buffer + first triangle |
+| Null | Working | Client/runtime testing without GPU work |
+| DirectX 11 | Working prototype | Clear, dynamic colored 2D triangles/quads, resize, present |
 | Vulkan | Planned | Not implemented |
 | Metal | Planned | Not implemented |
-
-The renderer-facing API is intended to stay independent of the backend:
-
-```text
-Application / engine systems
-            |
-            v
-         Renderer
-      /      |      \
-     v       v       v
- DirectX   Vulkan   Metal
-```
 
 ## Platform plan
 
@@ -344,105 +478,106 @@ Application / engine systems
 
 ## Roadmap
 
-The roadmap is intentionally flexible.
-
 ### 0.0.1 — RENACO
 
-- [x] Initial repository structure.
-- [x] MIT License.
-- [x] CMake project.
-- [x] Minimal public API.
+- [x] CMake/C++ core.
 - [x] Native Win32 window.
-- [x] Windows event loop.
-- [x] Basic clean shutdown.
+- [x] Basic event loop and shutdown.
 
 ### 0.0.2 — MARIA
 
 - [x] Generic window abstraction.
-- [x] Platform window factory.
-- [x] Remove direct Win32 dependency from `Application.cpp`.
 - [x] Logger.
 - [x] Timer and delta time.
 
 ### 0.0.3 — ARPA
 
 - [x] Common renderer interface.
-- [x] Renderer backend enum/configuration.
-- [x] Renderer factory.
-- [x] `BeginFrame()` / `EndFrame()` lifecycle.
 - [x] Null Renderer.
-- [x] Explicit errors for unimplemented backends.
+- [x] Renderer lifecycle.
 
 ### 0.0.4 — ARPA+
 
-- [x] DirectX 11 backend on Windows.
-- [x] Opaque native-window handle for renderer integration.
-- [x] D3D11 device creation.
-- [x] DXGI swap chain.
-- [x] Render-target view.
-- [x] GPU frame clear and present.
-- [x] Command-line test interface.
-- [x] Fixed-frame smoke-test mode.
+- [x] DirectX 11 device and swap chain.
+- [x] GPU clear/present.
+- [x] CLI/self-test foundation.
 
 ### 0.0.5 — ATLAS
 
 - [x] Runtime HLSL compilation.
-- [x] DirectX vertex shader.
-- [x] DirectX pixel shader.
-- [x] Input layout.
-- [x] Vertex buffer.
-- [x] Viewport setup.
-- [x] First colored GPU triangle.
-- [x] `--graphics-test` command.
-- [x] Automatic graphics-pipeline smoke test.
+- [x] Vertex/pixel shaders.
+- [x] First GPU triangle.
+- [x] Penguin geometry test.
 
-### Next graphics work
+### 0.0.6 — BIG BEAR GUMMY
 
-- [ ] Handle swap-chain resize properly.
-- [ ] Move bring-up shaders out of renderer implementation.
-- [ ] Common shader abstraction.
-- [ ] Common GPU-buffer abstraction.
-- [ ] Renderer draw-command API.
-- [ ] Texture loading.
-- [ ] Basic 2D rendering.
-- [ ] Camera system.
+- [x] Public client `Game` lifecycle.
+- [x] Public `GameConfig`.
+- [x] Basic keyboard input API.
+- [x] Per-frame key down/pressed/released state.
+- [x] Public backend-neutral `Graphics2D` API.
+- [x] Dynamic 2D vertex buffer.
+- [x] `DrawTriangle`.
+- [x] `DrawQuad`.
+- [x] Renderer/window resize path.
+- [x] `OnResize` callback.
+- [x] Interactive Sandbox client.
+- [x] Runtime callback smoke test.
+
+### Next useful foundations
+
+- [ ] Mouse input.
+- [ ] Gamepad input.
+- [ ] Textures and image loading.
+- [ ] Sprite drawing.
+- [ ] 2D camera/world coordinates.
+- [ ] Basic transform type.
+- [ ] Asset handles/cache.
+- [ ] Scene foundation.
+- [ ] Entity/component design.
+- [ ] Audio layer.
 - [ ] Vulkan backend.
 - [ ] Metal backend.
+- [ ] Automated CI on supported platforms.
 
-### Core / engine work
+## Current limitations
 
-- [ ] Basic keyboard and mouse input API.
-- [ ] Cleaner application/game loop separation.
-- [ ] Automated CI tests.
-- [ ] Asset system.
-- [ ] Scene system.
-- [ ] Entity/component architecture.
-- [ ] Audio layer.
-- [ ] Plugin system.
-- [ ] Editor prototype.
+BIG BEAR GUMMY is a development foundation, not a complete game engine.
+
+Not implemented yet:
+
+- textures/sprites;
+- font/text rendering;
+- mouse/gamepad input;
+- audio;
+- scene/entity system;
+- asset management;
+- camera/world-space renderer;
+- physics;
+- scripting;
+- editor;
+- Vulkan/Metal;
+- Linux/macOS platform windows.
+
+The immediate 2D API is intentionally small so these systems can be added on top of a working runtime instead of designing them in isolation.
 
 ## Design principles
 
-- Core code should avoid OS-specific types.
+- Core/client code should not require OS-specific types.
 - Platform code belongs in `Engine/Platform`.
-- Graphics-backend code belongs in `Engine/Renderer`.
-- Vendor/store integrations should be optional.
-- New architecture should be introduced only when there is something concrete to test with it.
-- Unsupported features should fail explicitly instead of pretending to work.
+- Renderer backend code belongs in `Engine/Renderer`.
+- The public API should expose useful engine concepts rather than Win32/D3D details.
+- Unsupported backends should fail explicitly.
+- New systems should come with something concrete that can be run or tested.
+- Store/account/platform integrations should remain optional.
 
 ## Versioning
 
 Jevaing is pre-alpha and uses `0.x.x` versions.
 
-Until `1.0`, APIs, source layout and internal architecture may change without backwards-compatibility guarantees.
+Until `1.0`, public APIs, file layouts and internal architecture may change without backwards-compatibility guarantees.
 
-Development releases use internal codenames such as `RENACO`, `MARIA`, `ARPA`, `ARPA+` and `ATLAS`.
-
-## Contributing
-
-Prefer small, independently testable changes. Keep platform-specific and renderer-specific code isolated behind their respective abstractions whenever possible.
-
-Avoid introducing mandatory vendor services or large dependencies into the core without a clear reason.
+Development releases currently use codenames including `RENACO`, `MARIA`, `ARPA`, `ARPA+`, `ATLAS` and `BIG BEAR GUMMY`.
 
 ## License
 
