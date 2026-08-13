@@ -7,7 +7,7 @@
   <Identity
     Name="Jevaing.XboxSmokeTest"
     Publisher="CN=JevaingLocalDeveloper"
-    Version="0.0.11.0" />
+    Version="0.0.14.0" />
   <Properties>
     <DisplayName>Jevaing Xbox Smoke Test</DisplayName>
     <PublisherDisplayName>Jevaing Local Developer</PublisherDisplayName>

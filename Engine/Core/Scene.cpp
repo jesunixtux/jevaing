@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -147,6 +148,179 @@ namespace Jevaing
             {
                 return false;
             }
+        }
+
+        void ExpandBounds(Bounds3D& bounds, const Vec3& position)
+        {
+            if (!bounds.Valid)
+            {
+                bounds.Min = position;
+                bounds.Max = position;
+                bounds.Valid = true;
+                return;
+            }
+
+            bounds.Min.X = std::min(bounds.Min.X, position.X);
+            bounds.Min.Y = std::min(bounds.Min.Y, position.Y);
+            bounds.Min.Z = std::min(bounds.Min.Z, position.Z);
+            bounds.Max.X = std::max(bounds.Max.X, position.X);
+            bounds.Max.Y = std::max(bounds.Max.Y, position.Y);
+            bounds.Max.Z = std::max(bounds.Max.Z, position.Z);
+        }
+
+        void AddVertex(Mesh& mesh, const Vec3& position, const Vec3& normal, const Vec2& uv)
+        {
+            mesh.Vertices.push_back({ position, normal, uv });
+            ExpandBounds(mesh.Bounds, position);
+        }
+
+        Mesh CreateRuntimePlaneMesh(const char* name, bool vertical)
+        {
+            Mesh mesh;
+            mesh.Name = name;
+            mesh.HasNormals = true;
+            mesh.HasUV0 = true;
+
+            const Vec3 normal = vertical ? Vec3{ 0.0f, 0.0f, -1.0f } : Vec3{ 0.0f, 1.0f, 0.0f };
+            if (vertical)
+            {
+                AddVertex(mesh, { -0.5f, 0.5f, 0.0f }, normal, { 0.0f, 0.0f });
+                AddVertex(mesh, { 0.5f, 0.5f, 0.0f }, normal, { 1.0f, 0.0f });
+                AddVertex(mesh, { 0.5f, -0.5f, 0.0f }, normal, { 1.0f, 1.0f });
+                AddVertex(mesh, { -0.5f, -0.5f, 0.0f }, normal, { 0.0f, 1.0f });
+            }
+            else
+            {
+                AddVertex(mesh, { -0.5f, 0.0f, -0.5f }, normal, { 0.0f, 0.0f });
+                AddVertex(mesh, { 0.5f, 0.0f, -0.5f }, normal, { 1.0f, 0.0f });
+                AddVertex(mesh, { 0.5f, 0.0f, 0.5f }, normal, { 1.0f, 1.0f });
+                AddVertex(mesh, { -0.5f, 0.0f, 0.5f }, normal, { 0.0f, 1.0f });
+            }
+
+            mesh.Indices = { 0, 1, 2, 0, 2, 3 };
+            return mesh;
+        }
+
+        Mesh CreateRuntimeSphereMesh()
+        {
+            Mesh mesh;
+            mesh.Name = "Jevaing Runtime Sphere";
+            mesh.HasNormals = true;
+            mesh.HasUV0 = true;
+
+            constexpr int Rings = 10;
+            constexpr int Segments = 18;
+            for (int ring = 0; ring <= Rings; ++ring)
+            {
+                const float v = static_cast<float>(ring) / static_cast<float>(Rings);
+                const float phi = Pi * v;
+                const float y = std::cos(phi) * 0.5f;
+                const float radius = std::sin(phi) * 0.5f;
+                for (int segment = 0; segment <= Segments; ++segment)
+                {
+                    const float u = static_cast<float>(segment) / static_cast<float>(Segments);
+                    const float theta = Pi * 2.0f * u;
+                    const Vec3 position =
+                    {
+                        std::cos(theta) * radius,
+                        y,
+                        std::sin(theta) * radius
+                    };
+                    AddVertex(mesh, position, Normalize(position), { u, v });
+                }
+            }
+
+            for (int ring = 0; ring < Rings; ++ring)
+            {
+                for (int segment = 0; segment < Segments; ++segment)
+                {
+                    const std::uint32_t a = static_cast<std::uint32_t>(ring * (Segments + 1) + segment);
+                    const std::uint32_t b = a + Segments + 1;
+                    mesh.Indices.push_back(a);
+                    mesh.Indices.push_back(b);
+                    mesh.Indices.push_back(a + 1);
+                    mesh.Indices.push_back(a + 1);
+                    mesh.Indices.push_back(b);
+                    mesh.Indices.push_back(b + 1);
+                }
+            }
+
+            return mesh;
+        }
+
+        Mesh CreateRuntimeCylinderMesh(const char* name)
+        {
+            Mesh mesh;
+            mesh.Name = name;
+            mesh.HasNormals = true;
+            mesh.HasUV0 = true;
+
+            constexpr int Segments = 24;
+            for (int segment = 0; segment <= Segments; ++segment)
+            {
+                const float u = static_cast<float>(segment) / static_cast<float>(Segments);
+                const float theta = Pi * 2.0f * u;
+                const float x = std::cos(theta) * 0.5f;
+                const float z = std::sin(theta) * 0.5f;
+                const Vec3 normal = Normalize({ x, 0.0f, z });
+                AddVertex(mesh, { x, 0.5f, z }, normal, { u, 0.0f });
+                AddVertex(mesh, { x, -0.5f, z }, normal, { u, 1.0f });
+            }
+
+            for (int segment = 0; segment < Segments; ++segment)
+            {
+                const std::uint32_t a = static_cast<std::uint32_t>(segment * 2);
+                mesh.Indices.push_back(a);
+                mesh.Indices.push_back(a + 1);
+                mesh.Indices.push_back(a + 2);
+                mesh.Indices.push_back(a + 2);
+                mesh.Indices.push_back(a + 1);
+                mesh.Indices.push_back(a + 3);
+            }
+
+            return mesh;
+        }
+
+        std::string LowerName(const std::string& value)
+        {
+            std::string result = value;
+            std::transform(result.begin(), result.end(), result.begin(), [](unsigned char c)
+            {
+                return static_cast<char>(std::tolower(c));
+            });
+            return result;
+        }
+
+        const Mesh* RuntimePrimitiveMeshForEntity(const SceneEntity& entity)
+        {
+            const std::string name = LowerName(entity.Name);
+            if (name.find("sphere") != std::string::npos || entity.SphereCollider3D)
+            {
+                static const Mesh sphere = CreateRuntimeSphereMesh();
+                return &sphere;
+            }
+            if (name.find("cylinder") != std::string::npos)
+            {
+                static const Mesh cylinder = CreateRuntimeCylinderMesh("Jevaing Runtime Cylinder");
+                return &cylinder;
+            }
+            if (name.find("capsule") != std::string::npos || entity.CapsuleCollider3D)
+            {
+                static const Mesh capsule = CreateRuntimeCylinderMesh("Jevaing Runtime Capsule");
+                return &capsule;
+            }
+            if (name.find("plane") != std::string::npos)
+            {
+                static const Mesh plane = CreateRuntimePlaneMesh("Jevaing Runtime Plane", false);
+                return &plane;
+            }
+            if (name.find("quad") != std::string::npos)
+            {
+                static const Mesh quad = CreateRuntimePlaneMesh("Jevaing Runtime Quad", true);
+                return &quad;
+            }
+
+            return nullptr;
         }
 
         bool ParseBool(const std::string& value, bool& result)
@@ -548,10 +722,13 @@ namespace Jevaing
 
         for (const SceneEntity& entity : m_entities)
         {
-            if (entity.Camera && entity.Camera->Primary)
+            if (entity.Camera && (!primaryCamera || entity.Camera->Primary))
             {
                 primaryCamera = &entity;
-                break;
+                if (entity.Camera->Primary)
+                {
+                    break;
+                }
             }
         }
 
@@ -569,7 +746,7 @@ namespace Jevaing
             if (!warnedMissingPrimaryCamera)
             {
                 Internal::Logger::Warning(
-                    "[Jevaing][Scene][WARNING] 3D Scene render skipped because no primary CameraComponent exists."
+                    "[Jevaing][Scene][WARNING] 3D Scene render skipped because no CameraComponent exists."
                 );
                 warnedMissingPrimaryCamera = true;
             }
@@ -579,12 +756,37 @@ namespace Jevaing
 
         for (const SceneEntity& entity : m_entities)
         {
-            if (!entity.MeshRenderer || !entity.MeshRenderer->ModelAsset)
+            if (!entity.MeshRenderer)
             {
                 continue;
             }
 
             const Transform world = GetWorldTransform(entity.Id);
+            if (!entity.MeshRenderer->ModelAsset)
+            {
+                Material material;
+                if (entity.MeshRenderer->HasMaterialOverride)
+                {
+                    material = entity.MeshRenderer->MaterialOverride;
+                }
+                else
+                {
+                    material.BaseColor = { 0.25f, 0.72f, 1.0f, 1.0f };
+                }
+
+                if (const Mesh* primitive = RuntimePrimitiveMeshForEntity(entity))
+                {
+                    graphics.DrawMesh(*primitive, world, material);
+                    continue;
+                }
+
+                const Color color =
+                    entity.MeshRenderer->HasMaterialOverride
+                        ? entity.MeshRenderer->MaterialOverride.BaseColor
+                        : Color{ 0.25f, 0.72f, 1.0f, 1.0f };
+                graphics.DrawCube(world, color);
+                continue;
+            }
 
             for (const Mesh& mesh : entity.MeshRenderer->ModelAsset->Meshes)
             {

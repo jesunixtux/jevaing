@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 project(
     Jevaing
-    VERSION 0.0.11
+    VERSION 0.0.14
     LANGUAGES C CXX
 )
 

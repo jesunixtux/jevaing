@@ -1,6 +1,6 @@
 # Jevaing Xbox Smoke Test
 
-Experimental 0.0.11 smoke target for Xbox Developer Mode / UWP validation.
+Experimental 0.0.14 smoke target for Xbox Developer Mode / UWP validation.
 
 Current scope:
 

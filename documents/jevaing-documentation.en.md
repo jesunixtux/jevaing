@@ -1,13 +1,13 @@
 # Jevaing Documentation
 
-Version: `0.0.11`
+Version: `0.0.14`
 Status: early prototype, not production ready
 
 ## 1. Overview
 
 Jevaing is an experimental C++17 game engine built with CMake. Its current focus is to provide a small but usable foundation for standalone games, engine samples, editor tooling, 2D/3D rendering, physics, and early platform target preparation.
 
-Jevaing 0.0.11 adds the first editor/tooling pass and keeps the 0.0.10 physics foundation in place. The engine can now build an external game executable through a generated project template, and the editor can open, edit, preview, play, pause, step, save, and build a project.
+Jevaing 0.0.14 makes the editor prototype more functional while keeping the 0.0.10 physics foundation in place. The engine can build an external game executable through a generated project template, and the editor can open, edit, preview, play, pause, step, save, build a project, navigate the Scene view camera, and discard Play Mode changes on Stop.
 
 The project intentionally keeps engine APIs neutral. Client code uses Jevaing concepts such as `Scene`, components, `Graphics2D`, `Graphics3D`, `PhysicsWorld2D`, `PhysicsWorld3D`, and `Input`. Platform or backend details such as Win32, DirectX, XInput, Box2D, Jolt, ImGui, UWP, or GDK are not exposed through the public API.
 
@@ -23,7 +23,7 @@ Jevaing/
 |-- geometry/            Local sample assets.
 |-- Library/             Runtime library area.
 |-- Documentation/       Existing documentation area.
-|-- documents/           Bilingual user-facing documentation generated for 0.0.11.
+|-- documents/           Bilingual user-facing documentation generated for 0.0.14.
 |-- CMakeLists.txt       Root CMake build.
 |-- README.md            Main project overview.
 |-- THIRD_PARTY.md       Third-party dependency notes.
@@ -95,7 +95,7 @@ Current editor panels:
 
 - `Project Browser`: create or open projects.
 - `Hierarchy`: create/select entities and view parent-child relationships.
-- `Scene`: editor view for selection, grid feedback, and mouse-based transform editing.
+- `Scene`: editor view for selection, grid feedback, mouse-based transform editing, and independent view navigation.
 - `Game`: preview of the game camera framing.
 - `Inspector`: edit names, transforms, and core components.
 - `Project`: Unity-style project browser for `Assets`, `Scenes`, and `Source`.
@@ -106,6 +106,7 @@ Top menu:
 
 - `File`: save, close project, stop play mode, exit.
 - `Edit`, `GameObject`, `Assets`, `Build`, `Help`: reserved menu sections for future tooling.
+- `GameObject`: create Empty objects and 2D/3D primitives such as Cube, Sphere, Capsule, Cylinder, Plane, Quad, Sprite, and Circle.
 - `Windows`: show or hide editor panels.
 
 Play controls:
@@ -122,9 +123,11 @@ The editor warns about unsaved scene changes before exiting, closing a project, 
 
 `Scene` and `Game` are separate editor windows.
 
-The `Scene` view is an editor preview. It draws a grid and simple entity bounds, allows selecting entities with the mouse, and lets the user drag selected entities on the X/Y plane while not in Play Mode.
+The `Scene` view is an editor preview. It draws a grid and simple entity bounds, allows selecting entities with the mouse, supports reset/zoom/pan navigation, and lets the user drag selected entities on the X/Y plane both in Edit Mode and in the Play Mode runtime snapshot.
 
 The `Game` view is a camera preview. It draws a 16:9 framed preview using the scene camera as the offset reference. If a primary camera exists, it is preferred; otherwise the first camera component is used. This view is currently an MVP editor-rendered preview and is not yet the final embedded D3D11 runtime render target.
+
+The editor has a 2D/3D mode selector in the Project Browser, Scene view, and Build Settings. In Play Mode, `Scene` and `Game` run side by side: moving, editing, or deleting an object in `Scene` affects only the runtime snapshot, while `Game` shows the preview result. Stopping Play Mode discards runtime changes and restores the editable scene.
 
 ## 7. Project Workflow
 
@@ -205,7 +208,7 @@ The editor preview currently draws simplified ImGui representations. It is usefu
 
 ## 10. Physics
 
-Jevaing 0.0.10/0.0.11 keeps physics behind neutral public APIs.
+Jevaing 0.0.10/0.0.14 keeps physics behind neutral public APIs.
 
 2D physics:
 

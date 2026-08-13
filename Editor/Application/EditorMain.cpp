@@ -69,6 +69,8 @@ namespace
         Jevaing::Scene EditScene{"Untitled"};
         Jevaing::Scene PlayScene{"Play"};
         Jevaing::EntityId SelectedEntity = Jevaing::InvalidEntityId;
+        Jevaing::Vec3 SceneViewPosition = {};
+        float SceneViewZoom = 1.0f;
         Jevaing::Internal::BuildSettings BuildSettings;
         std::vector<ConsoleEntry> Console;
         bool ShowInfoLogs = true;
@@ -85,6 +87,24 @@ namespace
         LoadScene
     };
 
+    enum class EditorProjectMode
+    {
+        TwoD,
+        ThreeD
+    };
+
+    enum class EditorPrimitive
+    {
+        Cube,
+        Sphere,
+        Capsule,
+        Cylinder,
+        Plane,
+        Quad,
+        Sprite2D,
+        Circle2D
+    };
+
     ID3D11Device* g_device = nullptr;
     ID3D11DeviceContext* g_context = nullptr;
     IDXGISwapChain* g_swapChain = nullptr;
@@ -92,9 +112,18 @@ namespace
     HWND g_hwnd = nullptr;
     EditorState g_editor;
     PendingEditorAction g_pendingAction = PendingEditorAction::None;
+    EditorProjectMode g_projectMode = EditorProjectMode::ThreeD;
 
     void RequestPendingAction(PendingEditorAction action, const std::string& path = {});
     void StopPlayMode();
+
+    void MarkSceneChanged()
+    {
+        if (!g_editor.Playing)
+        {
+            g_editor.DirtyScene = true;
+        }
+    }
 
     void AddConsoleLog(
         Jevaing::Internal::LogLevel level,
@@ -361,6 +390,136 @@ namespace
         Jevaing::Internal::Logger::Info("Closed project.");
     }
 
+    std::string EnsureExampleTextureInProject()
+    {
+        if (!g_editor.HasProject)
+        {
+            return {};
+        }
+
+        const std::filesystem::path source =
+            std::filesystem::current_path() / "geometry" / "texture" / "base.png";
+        const std::filesystem::path textures =
+            std::filesystem::path(g_editor.Project.ProjectDirectory) /
+            g_editor.Project.AssetRoot /
+            "Textures";
+        const std::filesystem::path destination = textures / "base.png";
+
+        if (std::filesystem::exists(source) && !std::filesystem::exists(destination))
+        {
+            std::filesystem::create_directories(textures);
+            std::filesystem::copy_file(
+                source,
+                destination,
+                std::filesystem::copy_options::overwrite_existing
+            );
+        }
+
+        return (std::filesystem::path("Textures") / "base.png").string();
+    }
+
+    Jevaing::Scene& EditableScene()
+    {
+        return g_editor.Playing ? g_editor.PlayScene : g_editor.EditScene;
+    }
+
+    Jevaing::SceneEntity* CreatePrimitive(EditorPrimitive primitive)
+    {
+        if (!g_editor.HasProject)
+        {
+            return nullptr;
+        }
+
+        Jevaing::Scene& scene = EditableScene();
+        const char* name = "Entity";
+        switch (primitive)
+        {
+            case EditorPrimitive::Cube: name = "Cube"; break;
+            case EditorPrimitive::Sphere: name = "Sphere"; break;
+            case EditorPrimitive::Capsule: name = "Capsule"; break;
+            case EditorPrimitive::Cylinder: name = "Cylinder"; break;
+            case EditorPrimitive::Plane: name = "Plane"; break;
+            case EditorPrimitive::Quad: name = "Quad"; break;
+            case EditorPrimitive::Sprite2D: name = "Sprite"; break;
+            case EditorPrimitive::Circle2D: name = "Circle"; break;
+        }
+
+        Jevaing::SceneEntity* entity = scene.FindEntity(scene.CreateEntity(name));
+        if (!entity)
+        {
+            return nullptr;
+        }
+
+        entity->Transform.LocalTransform.Position = {};
+        entity->Transform.LocalTransform.Scale = { 1.0f, 1.0f, 1.0f };
+
+        switch (primitive)
+        {
+            case EditorPrimitive::Cube:
+                entity->MeshRenderer = Jevaing::MeshRendererComponent{};
+                entity->MeshRenderer->HasMaterialOverride = true;
+                entity->MeshRenderer->MaterialOverride.BaseColor = { 0.25f, 0.62f, 1.0f, 1.0f };
+                entity->BoxCollider3D = Jevaing::BoxCollider3DComponent{};
+                break;
+
+            case EditorPrimitive::Sphere:
+                entity->MeshRenderer = Jevaing::MeshRendererComponent{};
+                entity->MeshRenderer->HasMaterialOverride = true;
+                entity->MeshRenderer->MaterialOverride.BaseColor = { 0.36f, 0.78f, 1.0f, 1.0f };
+                entity->SphereCollider3D = Jevaing::SphereCollider3DComponent{};
+                break;
+
+            case EditorPrimitive::Capsule:
+                entity->MeshRenderer = Jevaing::MeshRendererComponent{};
+                entity->MeshRenderer->HasMaterialOverride = true;
+                entity->MeshRenderer->MaterialOverride.BaseColor = { 0.82f, 0.68f, 1.0f, 1.0f };
+                entity->CapsuleCollider3D = Jevaing::CapsuleCollider3DComponent{};
+                break;
+
+            case EditorPrimitive::Cylinder:
+                entity->MeshRenderer = Jevaing::MeshRendererComponent{};
+                entity->MeshRenderer->HasMaterialOverride = true;
+                entity->MeshRenderer->MaterialOverride.BaseColor = { 1.0f, 0.68f, 0.32f, 1.0f };
+                entity->BoxCollider3D = Jevaing::BoxCollider3DComponent{};
+                break;
+
+            case EditorPrimitive::Plane:
+                entity->Transform.LocalTransform.Scale = { 6.0f, 0.08f, 6.0f };
+                entity->MeshRenderer = Jevaing::MeshRendererComponent{};
+                entity->MeshRenderer->HasMaterialOverride = true;
+                entity->MeshRenderer->MaterialOverride.BaseColor = { 0.42f, 0.54f, 0.44f, 1.0f };
+                entity->BoxCollider3D = Jevaing::BoxCollider3DComponent{};
+                entity->BoxCollider3D->Size = { 6.0f, 0.08f, 6.0f };
+                break;
+
+            case EditorPrimitive::Quad:
+                entity->MeshRenderer = Jevaing::MeshRendererComponent{};
+                entity->MeshRenderer->HasMaterialOverride = true;
+                entity->MeshRenderer->MaterialOverride.BaseColor = { 0.95f, 0.95f, 0.78f, 1.0f };
+                entity->BoxCollider3D = Jevaing::BoxCollider3DComponent{};
+                entity->BoxCollider3D->Size = { 1.0f, 1.0f, 0.08f };
+                break;
+
+            case EditorPrimitive::Sprite2D:
+                entity->SpriteRenderer2D = Jevaing::SpriteRenderer2DComponent{};
+                entity->SpriteRenderer2D->TexturePath = EnsureExampleTextureInProject();
+                entity->SpriteRenderer2D->Size = { 1.0f, 1.0f };
+                entity->BoxCollider2D = Jevaing::BoxCollider2DComponent{};
+                break;
+
+            case EditorPrimitive::Circle2D:
+                entity->SpriteRenderer2D = Jevaing::SpriteRenderer2DComponent{};
+                entity->SpriteRenderer2D->Tint = { 0.35f, 0.82f, 1.0f, 1.0f };
+                entity->SpriteRenderer2D->Size = { 1.0f, 1.0f };
+                entity->CircleCollider2D = Jevaing::CircleCollider2DComponent{};
+                break;
+        }
+
+        g_editor.SelectedEntity = entity->Id;
+        MarkSceneChanged();
+        return entity;
+    }
+
     void ExecutePendingAction()
     {
         const PendingEditorAction action = g_pendingAction;
@@ -473,6 +632,14 @@ namespace
         ImGui::TextUnformatted("New Project");
         ImGui::InputText("Project Name", &g_editor.NewProjectName);
         ImGui::InputText("Location", &g_editor.NewProjectLocation);
+        int mode = g_projectMode == EditorProjectMode::ThreeD ? 1 : 0;
+        if (ImGui::Combo("Template", &mode, "2D\0 3D\0"))
+        {
+            g_projectMode =
+                mode == 0
+                    ? EditorProjectMode::TwoD
+                    : EditorProjectMode::ThreeD;
+        }
 
         if (ImGui::Button("Create Project"))
         {
@@ -506,7 +673,7 @@ namespace
 
         ImGui::Separator();
         ImGui::TextUnformatted("Recent Projects");
-        ImGui::TextDisabled("Recent projects persistence is available in the 0.0.11 settings file roadmap.");
+        ImGui::TextDisabled("Recent projects persistence is available in the editor settings roadmap.");
         ImGui::End();
     }
 
@@ -543,16 +710,23 @@ namespace
         {
             if (ImGui::MenuItem("Create Empty"))
             {
-                Jevaing::EntityId childId = g_editor.EditScene.CreateEntity("Entity");
-                g_editor.EditScene.SetParent(childId, entity.Id);
-                g_editor.DirtyScene = true;
+                Jevaing::Scene& scene = EditableScene();
+                Jevaing::EntityId childId = scene.CreateEntity("Entity");
+                scene.SetParent(childId, entity.Id);
+                if (!g_editor.Playing)
+                {
+                    MarkSceneChanged();
+                }
             }
 
             if (ImGui::MenuItem("Delete"))
             {
-                g_editor.EditScene.DestroyEntity(entity.Id);
+                EditableScene().DestroyEntity(entity.Id);
                 g_editor.SelectedEntity = Jevaing::InvalidEntityId;
-                g_editor.DirtyScene = true;
+                if (!g_editor.Playing)
+                {
+                    MarkSceneChanged();
+                }
                 ImGui::EndPopup();
                 if (open)
                 {
@@ -569,7 +743,7 @@ namespace
             std::vector<Jevaing::EntityId> children = entity.Children;
             for (Jevaing::EntityId childId : children)
             {
-                Jevaing::SceneEntity* child = g_editor.EditScene.FindEntity(childId);
+                Jevaing::SceneEntity* child = EditableScene().FindEntity(childId);
                 if (child)
                 {
                     RenderEntityNode(*child);
@@ -589,24 +763,61 @@ namespace
             return;
         }
 
+        if (ImGui::Button("Create"))
+        {
+            ImGui::OpenPopup("HierarchyCreatePopup");
+        }
+
+        if (ImGui::BeginPopup("HierarchyCreatePopup"))
+        {
+            if (ImGui::MenuItem("Empty"))
+            {
+                g_editor.SelectedEntity = EditableScene().CreateEntity("Entity");
+                if (!g_editor.Playing)
+                {
+                    MarkSceneChanged();
+                }
+            }
+
+            if (ImGui::BeginMenu("3D Object"))
+            {
+                if (ImGui::MenuItem("Cube")) CreatePrimitive(EditorPrimitive::Cube);
+                if (ImGui::MenuItem("Sphere")) CreatePrimitive(EditorPrimitive::Sphere);
+                if (ImGui::MenuItem("Capsule")) CreatePrimitive(EditorPrimitive::Capsule);
+                if (ImGui::MenuItem("Cylinder")) CreatePrimitive(EditorPrimitive::Cylinder);
+                if (ImGui::MenuItem("Plane")) CreatePrimitive(EditorPrimitive::Plane);
+                if (ImGui::MenuItem("Quad")) CreatePrimitive(EditorPrimitive::Quad);
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::BeginMenu("2D Object"))
+            {
+                if (ImGui::MenuItem("Sprite")) CreatePrimitive(EditorPrimitive::Sprite2D);
+                if (ImGui::MenuItem("Circle")) CreatePrimitive(EditorPrimitive::Circle2D);
+                if (ImGui::MenuItem("Quad")) CreatePrimitive(EditorPrimitive::Sprite2D);
+                ImGui::EndMenu();
+            }
+
+            ImGui::EndPopup();
+        }
+
+        ImGui::SameLine();
         if (ImGui::Button("Create Empty"))
         {
-            g_editor.SelectedEntity = g_editor.EditScene.CreateEntity("Entity");
-            g_editor.DirtyScene = true;
+            g_editor.SelectedEntity = EditableScene().CreateEntity("Entity");
+            if (!g_editor.Playing)
+            {
+                MarkSceneChanged();
+            }
         }
 
         ImGui::SameLine();
         if (ImGui::Button("Create Cube"))
         {
-            Jevaing::SceneEntity* cube =
-                g_editor.EditScene.FindEntity(g_editor.EditScene.CreateEntity("Cube"));
-            cube->MeshRenderer = Jevaing::MeshRendererComponent{};
-            cube->BoxCollider3D = Jevaing::BoxCollider3DComponent{};
-            g_editor.SelectedEntity = cube->Id;
-            g_editor.DirtyScene = true;
+            CreatePrimitive(EditorPrimitive::Cube);
         }
 
-        for (Jevaing::SceneEntity& entity : g_editor.EditScene.GetEntities())
+        for (Jevaing::SceneEntity& entity : EditableScene().GetEntities())
         {
             if (entity.Parent == Jevaing::InvalidEntityId)
             {
@@ -623,7 +834,7 @@ namespace
         if (ImGui::DragFloat3(label, values, 0.05f))
         {
             value = { values[0], values[1], values[2] };
-            g_editor.DirtyScene = true;
+            MarkSceneChanged();
         }
     }
 
@@ -634,7 +845,7 @@ namespace
         if (ImGui::SmallButton(label))
         {
             component.reset();
-            g_editor.DirtyScene = true;
+            MarkSceneChanged();
         }
     }
 
@@ -648,7 +859,7 @@ namespace
             return;
         }
         Jevaing::SceneEntity* entity =
-            g_editor.EditScene.FindEntity(g_editor.SelectedEntity);
+            EditableScene().FindEntity(g_editor.SelectedEntity);
 
         if (!entity)
         {
@@ -659,7 +870,7 @@ namespace
 
         if (ImGui::InputText("Name", &entity->Name))
         {
-            g_editor.DirtyScene = true;
+            MarkSceneChanged();
         }
 
         if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen))
@@ -694,9 +905,12 @@ namespace
             if (ImGui::Combo("Type##rb3d", &type, "Static\0Kinematic\0Dynamic\0"))
             {
                 entity->RigidBody3D->Type = static_cast<Jevaing::BodyType>(type);
-                g_editor.DirtyScene = true;
+                MarkSceneChanged();
             }
-            ImGui::DragFloat("Gravity Factor", &entity->RigidBody3D->GravityFactor, 0.05f);
+            if (ImGui::DragFloat("Gravity Factor", &entity->RigidBody3D->GravityFactor, 0.05f))
+            {
+                MarkSceneChanged();
+            }
             RemoveComponentButton("Remove RigidBody3D", entity->RigidBody3D);
         }
 
@@ -704,23 +918,38 @@ namespace
         {
             ImGui::SeparatorText("BoxCollider3DComponent");
             EditVec3("Size##box3d", entity->BoxCollider3D->Size);
-            ImGui::Checkbox("Trigger##box3d", &entity->BoxCollider3D->IsTrigger);
+            if (ImGui::Checkbox("Trigger##box3d", &entity->BoxCollider3D->IsTrigger))
+            {
+                MarkSceneChanged();
+            }
             RemoveComponentButton("Remove BoxCollider3D", entity->BoxCollider3D);
         }
 
         if (entity->SphereCollider3D)
         {
             ImGui::SeparatorText("SphereCollider3DComponent");
-            ImGui::DragFloat("Radius##sphere3d", &entity->SphereCollider3D->Radius, 0.05f, 0.01f);
-            ImGui::Checkbox("Trigger##sphere3d", &entity->SphereCollider3D->IsTrigger);
+            if (ImGui::DragFloat("Radius##sphere3d", &entity->SphereCollider3D->Radius, 0.05f, 0.01f))
+            {
+                MarkSceneChanged();
+            }
+            if (ImGui::Checkbox("Trigger##sphere3d", &entity->SphereCollider3D->IsTrigger))
+            {
+                MarkSceneChanged();
+            }
             RemoveComponentButton("Remove SphereCollider3D", entity->SphereCollider3D);
         }
 
         if (entity->CapsuleCollider3D)
         {
             ImGui::SeparatorText("CapsuleCollider3DComponent");
-            ImGui::DragFloat("Radius##capsule3d", &entity->CapsuleCollider3D->Radius, 0.05f, 0.01f);
-            ImGui::DragFloat("Height##capsule3d", &entity->CapsuleCollider3D->Height, 0.05f, 0.01f);
+            if (ImGui::DragFloat("Radius##capsule3d", &entity->CapsuleCollider3D->Radius, 0.05f, 0.01f))
+            {
+                MarkSceneChanged();
+            }
+            if (ImGui::DragFloat("Height##capsule3d", &entity->CapsuleCollider3D->Height, 0.05f, 0.01f))
+            {
+                MarkSceneChanged();
+            }
             RemoveComponentButton("Remove CapsuleCollider3D", entity->CapsuleCollider3D);
         }
 
@@ -731,7 +960,7 @@ namespace
             if (ImGui::Combo("Type##rb2d", &type, "Static\0Kinematic\0Dynamic\0"))
             {
                 entity->RigidBody2D->Type = static_cast<Jevaing::BodyType>(type);
-                g_editor.DirtyScene = true;
+                MarkSceneChanged();
             }
             RemoveComponentButton("Remove RigidBody2D", entity->RigidBody2D);
         }
@@ -743,7 +972,7 @@ namespace
             if (ImGui::DragFloat2("Size##box2d", size, 0.05f))
             {
                 entity->BoxCollider2D->Size = { size[0], size[1] };
-                g_editor.DirtyScene = true;
+                MarkSceneChanged();
             }
             RemoveComponentButton("Remove BoxCollider2D", entity->BoxCollider2D);
         }
@@ -751,7 +980,10 @@ namespace
         if (entity->CircleCollider2D)
         {
             ImGui::SeparatorText("CircleCollider2DComponent");
-            ImGui::DragFloat("Radius##circle2d", &entity->CircleCollider2D->Radius, 0.05f, 0.01f);
+            if (ImGui::DragFloat("Radius##circle2d", &entity->CircleCollider2D->Radius, 0.05f, 0.01f))
+            {
+                MarkSceneChanged();
+            }
             RemoveComponentButton("Remove CircleCollider2D", entity->CircleCollider2D);
         }
 
@@ -762,17 +994,21 @@ namespace
 
         if (ImGui::BeginPopup("AddComponentPopup"))
         {
-            if (ImGui::MenuItem("CameraComponent")) entity->Camera = Jevaing::CameraComponent{};
-            if (ImGui::MenuItem("MeshRendererComponent")) entity->MeshRenderer = Jevaing::MeshRendererComponent{};
-            if (ImGui::MenuItem("SpriteRenderer2DComponent")) entity->SpriteRenderer2D = Jevaing::SpriteRenderer2DComponent{};
-            if (ImGui::MenuItem("RigidBody2DComponent")) entity->RigidBody2D = Jevaing::RigidBody2DComponent{};
-            if (ImGui::MenuItem("BoxCollider2DComponent")) entity->BoxCollider2D = Jevaing::BoxCollider2DComponent{};
-            if (ImGui::MenuItem("CircleCollider2DComponent")) entity->CircleCollider2D = Jevaing::CircleCollider2DComponent{};
-            if (ImGui::MenuItem("RigidBody3DComponent")) entity->RigidBody3D = Jevaing::RigidBody3DComponent{};
-            if (ImGui::MenuItem("BoxCollider3DComponent")) entity->BoxCollider3D = Jevaing::BoxCollider3DComponent{};
-            if (ImGui::MenuItem("SphereCollider3DComponent")) entity->SphereCollider3D = Jevaing::SphereCollider3DComponent{};
-            if (ImGui::MenuItem("CapsuleCollider3DComponent")) entity->CapsuleCollider3D = Jevaing::CapsuleCollider3DComponent{};
-            g_editor.DirtyScene = true;
+            bool componentAdded = false;
+            if (ImGui::MenuItem("CameraComponent")) { entity->Camera = Jevaing::CameraComponent{}; componentAdded = true; }
+            if (ImGui::MenuItem("MeshRendererComponent")) { entity->MeshRenderer = Jevaing::MeshRendererComponent{}; componentAdded = true; }
+            if (ImGui::MenuItem("SpriteRenderer2DComponent")) { entity->SpriteRenderer2D = Jevaing::SpriteRenderer2DComponent{}; componentAdded = true; }
+            if (ImGui::MenuItem("RigidBody2DComponent")) { entity->RigidBody2D = Jevaing::RigidBody2DComponent{}; componentAdded = true; }
+            if (ImGui::MenuItem("BoxCollider2DComponent")) { entity->BoxCollider2D = Jevaing::BoxCollider2DComponent{}; componentAdded = true; }
+            if (ImGui::MenuItem("CircleCollider2DComponent")) { entity->CircleCollider2D = Jevaing::CircleCollider2DComponent{}; componentAdded = true; }
+            if (ImGui::MenuItem("RigidBody3DComponent")) { entity->RigidBody3D = Jevaing::RigidBody3DComponent{}; componentAdded = true; }
+            if (ImGui::MenuItem("BoxCollider3DComponent")) { entity->BoxCollider3D = Jevaing::BoxCollider3DComponent{}; componentAdded = true; }
+            if (ImGui::MenuItem("SphereCollider3DComponent")) { entity->SphereCollider3D = Jevaing::SphereCollider3DComponent{}; componentAdded = true; }
+            if (ImGui::MenuItem("CapsuleCollider3DComponent")) { entity->CapsuleCollider3D = Jevaing::CapsuleCollider3DComponent{}; componentAdded = true; }
+            if (componentAdded)
+            {
+                MarkSceneChanged();
+            }
             ImGui::EndPopup();
         }
 
@@ -787,6 +1023,17 @@ namespace
     )
     {
         const Jevaing::Vec3& p = entity.Transform.LocalTransform.Position;
+        if (g_projectMode == EditorProjectMode::ThreeD)
+        {
+            const float x = p.X - offset.X;
+            const float y = p.Y - offset.Y;
+            const float z = p.Z - offset.Z;
+            return ImVec2(
+                center.x + (x - z) * scale * 0.72f,
+                center.y - y * scale + (x + z) * scale * 0.34f
+            );
+        }
+
         return ImVec2(
             center.x + (p.X - offset.X) * scale,
             center.y - (p.Y - offset.Y) * scale
@@ -802,14 +1049,162 @@ namespace
         );
     }
 
+    ImU32 EntityColor(const Jevaing::SceneEntity& entity, bool selected)
+    {
+        if (selected)
+        {
+            return IM_COL32(255, 210, 75, 255);
+        }
+        if (entity.Camera)
+        {
+            return IM_COL32(120, 230, 150, 255);
+        }
+        if (entity.SphereCollider3D)
+        {
+            return IM_COL32(92, 190, 255, 255);
+        }
+        if (entity.CapsuleCollider3D)
+        {
+            return IM_COL32(188, 150, 255, 255);
+        }
+        if (entity.SpriteRenderer2D)
+        {
+            return IM_COL32(255, 245, 175, 255);
+        }
+        return IM_COL32(95, 180, 255, 255);
+    }
+
+    std::string LowerName(const std::string& value)
+    {
+        std::string result = value;
+        std::transform(result.begin(), result.end(), result.begin(), [](unsigned char c)
+        {
+            return static_cast<char>(std::tolower(c));
+        });
+        return result;
+    }
+
+    bool NameContains(const Jevaing::SceneEntity& entity, const char* token)
+    {
+        return LowerName(entity.Name).find(token) != std::string::npos;
+    }
+
+    ImVec2 ProjectPoint3D(
+        const Jevaing::Vec3& point,
+        const ImVec2& center,
+        float scale,
+        const Jevaing::Vec3& offset
+    )
+    {
+        const float x = point.X - offset.X;
+        const float y = point.Y - offset.Y;
+        const float z = point.Z - offset.Z;
+        return ImVec2(
+            center.x + (x - z) * scale * 0.72f,
+            center.y - y * scale + (x + z) * scale * 0.34f
+        );
+    }
+
+    void DrawIsoBox(
+        ImDrawList* drawList,
+        const Jevaing::SceneEntity& entity,
+        const ImVec2& center,
+        float scale,
+        ImU32 color,
+        bool selected,
+        const Jevaing::Vec3& offset
+    )
+    {
+        const Jevaing::Vec3& p = entity.Transform.LocalTransform.Position;
+        const Jevaing::Vec3& s = entity.Transform.LocalTransform.Scale;
+        const float hx = std::max(0.05f, std::fabs(s.X) * 0.5f);
+        const float hy = std::max(0.05f, std::fabs(s.Y) * 0.5f);
+        const float hz = std::max(0.05f, std::fabs(s.Z) * 0.5f);
+
+        const ImVec2 a = ProjectPoint3D({ p.X - hx, p.Y - hy, p.Z - hz }, center, scale, offset);
+        const ImVec2 b = ProjectPoint3D({ p.X + hx, p.Y - hy, p.Z - hz }, center, scale, offset);
+        const ImVec2 c = ProjectPoint3D({ p.X + hx, p.Y - hy, p.Z + hz }, center, scale, offset);
+        const ImVec2 d = ProjectPoint3D({ p.X - hx, p.Y - hy, p.Z + hz }, center, scale, offset);
+        const ImVec2 e = ProjectPoint3D({ p.X - hx, p.Y + hy, p.Z - hz }, center, scale, offset);
+        const ImVec2 f = ProjectPoint3D({ p.X + hx, p.Y + hy, p.Z - hz }, center, scale, offset);
+        const ImVec2 g = ProjectPoint3D({ p.X + hx, p.Y + hy, p.Z + hz }, center, scale, offset);
+        const ImVec2 h = ProjectPoint3D({ p.X - hx, p.Y + hy, p.Z + hz }, center, scale, offset);
+
+        const ImU32 side = color;
+        const ImU32 dark = IM_COL32(
+            static_cast<int>(((color >> IM_COL32_R_SHIFT) & 0xff) * 0.55f),
+            static_cast<int>(((color >> IM_COL32_G_SHIFT) & 0xff) * 0.55f),
+            static_cast<int>(((color >> IM_COL32_B_SHIFT) & 0xff) * 0.55f),
+            255
+        );
+        const ImU32 mid = IM_COL32(
+            static_cast<int>(((color >> IM_COL32_R_SHIFT) & 0xff) * 0.75f),
+            static_cast<int>(((color >> IM_COL32_G_SHIFT) & 0xff) * 0.75f),
+            static_cast<int>(((color >> IM_COL32_B_SHIFT) & 0xff) * 0.75f),
+            255
+        );
+
+        drawList->AddQuadFilled(e, f, g, h, side);
+        drawList->AddQuadFilled(f, b, c, g, mid);
+        drawList->AddQuadFilled(h, g, c, d, dark);
+        drawList->AddQuad(e, f, g, h, IM_COL32(18, 20, 24, 255), selected ? 2.5f : 1.0f);
+        drawList->AddQuad(f, b, c, g, IM_COL32(18, 20, 24, 255), 1.0f);
+        drawList->AddQuad(h, g, c, d, IM_COL32(18, 20, 24, 255), 1.0f);
+
+        if (selected)
+        {
+            drawList->AddLine(a, b, color, 2.0f);
+            drawList->AddLine(b, c, color, 2.0f);
+            drawList->AddLine(c, d, color, 2.0f);
+            drawList->AddLine(d, a, color, 2.0f);
+        }
+    }
+
+    void DrawEditorPrimitive2D(
+        ImDrawList* drawList,
+        const Jevaing::SceneEntity& entity,
+        const ImVec2& center,
+        float scale,
+        ImU32 color,
+        bool selected,
+        const Jevaing::Vec3& offset
+    )
+    {
+        const ImVec2 screen = EntityScreenPosition(entity, center, scale, offset);
+        const ImVec2 size = EntityScreenSize(entity, scale);
+
+        if (entity.CircleCollider2D || NameContains(entity, "circle"))
+        {
+            drawList->AddCircleFilled(screen, std::max(size.x, size.y) * 0.5f, color, 32);
+            drawList->AddCircle(screen, std::max(size.x, size.y) * 0.5f, selected ? IM_COL32(255, 210, 75, 255) : IM_COL32(24, 26, 31, 255), 32, selected ? 3.0f : 1.0f);
+        }
+        else
+        {
+            drawList->AddRectFilled(
+                ImVec2(screen.x - size.x * 0.5f, screen.y - size.y * 0.5f),
+                ImVec2(screen.x + size.x * 0.5f, screen.y + size.y * 0.5f),
+                color
+            );
+            drawList->AddRect(
+                ImVec2(screen.x - size.x * 0.5f, screen.y - size.y * 0.5f),
+                ImVec2(screen.x + size.x * 0.5f, screen.y + size.y * 0.5f),
+                selected ? IM_COL32(255, 210, 75, 255) : IM_COL32(24, 26, 31, 255),
+                0.0f,
+                0,
+                selected ? 3.0f : 1.0f
+            );
+        }
+    }
+
     bool PointInEntityRect(
         const ImVec2& point,
         const Jevaing::SceneEntity& entity,
         const ImVec2& center,
-        float scale
+        float scale,
+        const Jevaing::Vec3& offset
     )
     {
-        const ImVec2 screen = EntityScreenPosition(entity, center, scale);
+        const ImVec2 screen = EntityScreenPosition(entity, center, scale, offset);
         const ImVec2 size = EntityScreenSize(entity, scale);
         return
             point.x >= screen.x - size.x * 0.5f &&
@@ -827,23 +1222,67 @@ namespace
         const Jevaing::Vec3& offset = {}
     )
     {
+        const ImU32 color = EntityColor(entity, selected);
         const ImVec2 screen = EntityScreenPosition(entity, center, scale, offset);
-        const ImVec2 size = EntityScreenSize(entity, scale);
-        const ImU32 color =
-            selected
-                ? IM_COL32(255, 210, 75, 255)
-                : entity.Camera
-                    ? IM_COL32(120, 230, 150, 255)
-                    : IM_COL32(95, 180, 255, 255);
 
-        drawList->AddRect(
-            ImVec2(screen.x - size.x * 0.5f, screen.y - size.y * 0.5f),
-            ImVec2(screen.x + size.x * 0.5f, screen.y + size.y * 0.5f),
-            color,
-            0.0f,
-            0,
-            selected ? 3.0f : 1.5f
-        );
+        if (g_projectMode == EditorProjectMode::TwoD || entity.SpriteRenderer2D)
+        {
+            DrawEditorPrimitive2D(drawList, entity, center, scale, color, selected, offset);
+        }
+        else if (entity.SphereCollider3D || NameContains(entity, "sphere"))
+        {
+            const ImVec2 size = EntityScreenSize(entity, scale);
+            const float radius = std::max(size.x, size.y) * 0.38f;
+            drawList->AddCircleFilled(screen, radius, color, 40);
+            drawList->AddCircle(screen, radius, selected ? IM_COL32(255, 210, 75, 255) : IM_COL32(20, 22, 26, 255), 40, selected ? 3.0f : 1.2f);
+            drawList->AddEllipse(screen, ImVec2(radius, radius * 0.35f), IM_COL32(255, 255, 255, 80), 0.0f, 32, 1.0f);
+        }
+        else if (entity.CapsuleCollider3D || NameContains(entity, "capsule"))
+        {
+            const ImVec2 size = EntityScreenSize(entity, scale);
+            const float radius = std::max(10.0f, size.x * 0.35f);
+            const float halfHeight = std::max(radius, size.y * 0.55f);
+            drawList->AddRectFilled(
+                ImVec2(screen.x - radius, screen.y - halfHeight),
+                ImVec2(screen.x + radius, screen.y + halfHeight),
+                color
+            );
+            drawList->AddCircleFilled(ImVec2(screen.x, screen.y - halfHeight), radius, color, 32);
+            drawList->AddCircleFilled(ImVec2(screen.x, screen.y + halfHeight), radius, color, 32);
+            drawList->AddRect(ImVec2(screen.x - radius, screen.y - halfHeight), ImVec2(screen.x + radius, screen.y + halfHeight), IM_COL32(20, 22, 26, 255), 0.0f, 0, selected ? 3.0f : 1.0f);
+        }
+        else if (NameContains(entity, "cylinder"))
+        {
+            const ImVec2 size = EntityScreenSize(entity, scale);
+            const float radius = std::max(10.0f, size.x * 0.45f);
+            const float height = std::max(24.0f, size.y);
+            drawList->AddRectFilled(ImVec2(screen.x - radius, screen.y - height * 0.5f), ImVec2(screen.x + radius, screen.y + height * 0.5f), color);
+            drawList->AddEllipseFilled(ImVec2(screen.x, screen.y - height * 0.5f), ImVec2(radius, radius * 0.32f), color, 0.0f, 32);
+            drawList->AddEllipse(ImVec2(screen.x, screen.y + height * 0.5f), ImVec2(radius, radius * 0.32f), IM_COL32(20, 22, 26, 255), 0.0f, 32, selected ? 3.0f : 1.0f);
+            drawList->AddEllipse(ImVec2(screen.x, screen.y - height * 0.5f), ImVec2(radius, radius * 0.32f), IM_COL32(20, 22, 26, 255), 0.0f, 32, selected ? 3.0f : 1.0f);
+        }
+        else if (NameContains(entity, "plane"))
+        {
+            const Jevaing::Vec3& p = entity.Transform.LocalTransform.Position;
+            const Jevaing::Vec3& s = entity.Transform.LocalTransform.Scale;
+            const float hx = std::max(0.5f, std::fabs(s.X) * 0.5f);
+            const float hz = std::max(0.5f, std::fabs(s.Z) * 0.5f);
+            const ImVec2 a = ProjectPoint3D({ p.X - hx, p.Y, p.Z - hz }, center, scale, offset);
+            const ImVec2 b = ProjectPoint3D({ p.X + hx, p.Y, p.Z - hz }, center, scale, offset);
+            const ImVec2 c = ProjectPoint3D({ p.X + hx, p.Y, p.Z + hz }, center, scale, offset);
+            const ImVec2 d = ProjectPoint3D({ p.X - hx, p.Y, p.Z + hz }, center, scale, offset);
+            drawList->AddQuadFilled(a, b, c, d, color);
+            drawList->AddQuad(a, b, c, d, selected ? IM_COL32(255, 210, 75, 255) : IM_COL32(20, 22, 26, 255), selected ? 3.0f : 1.0f);
+        }
+        else if (NameContains(entity, "quad"))
+        {
+            DrawEditorPrimitive2D(drawList, entity, center, scale, color, selected, offset);
+        }
+        else
+        {
+            DrawIsoBox(drawList, entity, center, scale, color, selected, offset);
+        }
+
         drawList->AddText(ImVec2(screen.x + 6.0f, screen.y - 18.0f), color, entity.Name.c_str());
     }
 
@@ -857,38 +1296,95 @@ namespace
             return;
         }
 
+        int mode = g_projectMode == EditorProjectMode::ThreeD ? 1 : 0;
+        ImGui::SetNextItemWidth(120.0f);
+        if (ImGui::Combo("Mode", &mode, "2D\0 3D\0"))
+        {
+            g_projectMode =
+                mode == 0
+                    ? EditorProjectMode::TwoD
+                    : EditorProjectMode::ThreeD;
+        }
+        ImGui::SameLine();
+        ImGui::TextDisabled(g_editor.Playing ? "Runtime scene" : "Edit scene");
+        ImGui::SameLine();
+        if (ImGui::Button("Reset View"))
+        {
+            g_editor.SceneViewPosition = {};
+            g_editor.SceneViewZoom = 1.0f;
+        }
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(120.0f);
+        ImGui::SliderFloat("Zoom", &g_editor.SceneViewZoom, 0.25f, 3.0f, "%.2fx");
+
         const ImVec2 origin = ImGui::GetCursorScreenPos();
         const ImVec2 size = ImGui::GetContentRegionAvail();
         ImGui::InvisibleButton(
             "SceneCanvas",
             size,
-            ImGuiButtonFlags_MouseButtonLeft
+            ImGuiButtonFlags_MouseButtonLeft |
+            ImGuiButtonFlags_MouseButtonMiddle |
+            ImGuiButtonFlags_MouseButtonRight
         );
 
         const bool hovered = ImGui::IsItemHovered();
         const bool active = ImGui::IsItemActive();
-        const ImVec2 mouse = ImGui::GetIO().MousePos;
+        ImGuiIO& io = ImGui::GetIO();
+        const ImVec2 mouse = io.MousePos;
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         drawList->AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + size.y), IM_COL32(22, 24, 28, 255));
 
-        const float scale = 42.0f;
+        if (hovered && io.MouseWheel != 0.0f)
+        {
+            g_editor.SceneViewZoom =
+                std::clamp(g_editor.SceneViewZoom + io.MouseWheel * 0.08f, 0.25f, 3.0f);
+        }
+
+        const float scale = 42.0f * g_editor.SceneViewZoom;
+        const Jevaing::Vec3 offset = g_editor.SceneViewPosition;
         const ImVec2 center(origin.x + size.x * 0.5f, origin.y + size.y * 0.65f);
 
-        for (int i = -10; i <= 10; ++i)
+        const int verticalLineCount = static_cast<int>(size.x / scale) + 4;
+        const int horizontalLineCount = static_cast<int>(size.y / scale) + 4;
+        const float gridX = center.x - std::fmod(offset.X * scale, scale);
+        const float gridY = center.y + std::fmod(offset.Y * scale, scale);
+
+        for (int i = -verticalLineCount; i <= verticalLineCount; ++i)
         {
-            const float x = center.x + i * scale;
+            const float x = gridX + i * scale;
             drawList->AddLine(ImVec2(x, origin.y), ImVec2(x, origin.y + size.y), IM_COL32(48, 52, 58, 255));
-            const float y = center.y + i * scale;
+        }
+
+        for (int i = -horizontalLineCount; i <= horizontalLineCount; ++i)
+        {
+            const float y = gridY + i * scale;
             drawList->AddLine(ImVec2(origin.x, y), ImVec2(origin.x + size.x, y), IM_COL32(48, 52, 58, 255));
+        }
+
+        if (active &&
+            (ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 0.0f) ||
+             ImGui::IsMouseDragging(ImGuiMouseButton_Right, 0.0f)))
+        {
+            const ImVec2 delta = io.MouseDelta;
+            if (g_projectMode == EditorProjectMode::ThreeD)
+            {
+                g_editor.SceneViewPosition.X -= delta.x / (scale * 0.72f);
+                g_editor.SceneViewPosition.Y += delta.y / scale;
+            }
+            else
+            {
+                g_editor.SceneViewPosition.X -= delta.x / scale;
+                g_editor.SceneViewPosition.Y += delta.y / scale;
+            }
         }
 
         if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
             g_editor.SelectedEntity = Jevaing::InvalidEntityId;
-            std::vector<Jevaing::SceneEntity>& entities = g_editor.EditScene.GetEntities();
+            std::vector<Jevaing::SceneEntity>& entities = EditableScene().GetEntities();
             for (auto it = entities.rbegin(); it != entities.rend(); ++it)
             {
-                if (PointInEntityRect(mouse, *it, center, scale))
+                if (PointInEntityRect(mouse, *it, center, scale, offset))
                 {
                     g_editor.SelectedEntity = it->Id;
                     break;
@@ -896,26 +1392,37 @@ namespace
             }
         }
 
-        if (active && !g_editor.Playing && g_editor.SelectedEntity != Jevaing::InvalidEntityId)
+        if (active && g_editor.SelectedEntity != Jevaing::InvalidEntityId)
         {
             Jevaing::SceneEntity* entity =
-                g_editor.EditScene.FindEntity(g_editor.SelectedEntity);
+                EditableScene().FindEntity(g_editor.SelectedEntity);
             if (entity && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f))
             {
-                entity->Transform.LocalTransform.Position.X = (mouse.x - center.x) / scale;
-                entity->Transform.LocalTransform.Position.Y = -(mouse.y - center.y) / scale;
-                g_editor.DirtyScene = true;
+                if (g_projectMode == EditorProjectMode::ThreeD)
+                {
+                    entity->Transform.LocalTransform.Position.X =
+                        offset.X + (mouse.x - center.x) / (scale * 0.72f);
+                    entity->Transform.LocalTransform.Position.Y =
+                        offset.Y - (mouse.y - center.y) / scale;
+                }
+                else
+                {
+                    entity->Transform.LocalTransform.Position.X = offset.X + (mouse.x - center.x) / scale;
+                    entity->Transform.LocalTransform.Position.Y = offset.Y - (mouse.y - center.y) / scale;
+                }
+                MarkSceneChanged();
             }
         }
 
-        for (const Jevaing::SceneEntity& entity : g_editor.EditScene.GetEntities())
+        for (const Jevaing::SceneEntity& entity : EditableScene().GetEntities())
         {
             DrawSceneEntity(
                 drawList,
                 entity,
                 center,
                 scale,
-                entity.Id == g_editor.SelectedEntity
+                entity.Id == g_editor.SelectedEntity,
+                offset
             );
         }
 
@@ -1289,6 +1796,15 @@ namespace
         }
 
         ImGui::SeparatorText("Target");
+        int projectMode = g_projectMode == EditorProjectMode::ThreeD ? 1 : 0;
+        if (ImGui::Combo("Project Mode", &projectMode, "2D\0 3D\0"))
+        {
+            g_projectMode =
+                projectMode == 0
+                    ? EditorProjectMode::TwoD
+                    : EditorProjectMode::ThreeD;
+        }
+
         for (const Jevaing::Internal::BuildTargetInfo& target : Jevaing::Internal::GetBuildTargetInfo())
         {
             const bool selected = g_editor.BuildSettings.Target == target.Target;
@@ -1401,6 +1917,31 @@ namespace
             }
             if (ImGui::BeginMenu("GameObject"))
             {
+                if (ImGui::MenuItem("Create Empty", nullptr, false, g_editor.HasProject))
+                {
+                    g_editor.SelectedEntity = EditableScene().CreateEntity("Entity");
+                    if (!g_editor.Playing)
+                    {
+                        MarkSceneChanged();
+                    }
+                }
+                if (ImGui::BeginMenu("3D Object", g_editor.HasProject))
+                {
+                    if (ImGui::MenuItem("Cube")) CreatePrimitive(EditorPrimitive::Cube);
+                    if (ImGui::MenuItem("Sphere")) CreatePrimitive(EditorPrimitive::Sphere);
+                    if (ImGui::MenuItem("Capsule")) CreatePrimitive(EditorPrimitive::Capsule);
+                    if (ImGui::MenuItem("Cylinder")) CreatePrimitive(EditorPrimitive::Cylinder);
+                    if (ImGui::MenuItem("Plane")) CreatePrimitive(EditorPrimitive::Plane);
+                    if (ImGui::MenuItem("Quad")) CreatePrimitive(EditorPrimitive::Quad);
+                    ImGui::EndMenu();
+                }
+                if (ImGui::BeginMenu("2D Object", g_editor.HasProject))
+                {
+                    if (ImGui::MenuItem("Sprite")) CreatePrimitive(EditorPrimitive::Sprite2D);
+                    if (ImGui::MenuItem("Circle")) CreatePrimitive(EditorPrimitive::Circle2D);
+                    if (ImGui::MenuItem("Quad")) CreatePrimitive(EditorPrimitive::Sprite2D);
+                    ImGui::EndMenu();
+                }
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Assets"))
@@ -1631,7 +2172,7 @@ namespace
         HWND hwnd =
             CreateWindowW(
                 wc.lpszClassName,
-                L"JevaingEditor 0.0.11",
+                L"JevaingEditor 0.0.14",
                 WS_OVERLAPPEDWINDOW,
                 100,
                 100,
@@ -1720,6 +2261,7 @@ namespace
         Jevaing::Internal::Logger::Info(std::string("ImGui version: ") + IMGUI_VERSION);
         Jevaing::Internal::Logger::Info("Panels: Project Browser, Hierarchy, Scene, Game, Inspector, Project, Console, Build Settings");
         Jevaing::Internal::Logger::Info("Editor controls: Play, Pause, Step, Stop, Windows menu, mouse Scene editing, unsaved-change prompt");
+        Jevaing::Internal::Logger::Info("Editor prototyping: 2D/3D mode, Unity-style GameObject primitives, parallel Scene/Game Play Mode editing");
         for (const Jevaing::Internal::BuildTargetInfo& target : Jevaing::Internal::GetBuildTargetInfo())
         {
             Jevaing::Internal::Logger::Info(

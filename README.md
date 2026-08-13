@@ -2,21 +2,23 @@
 
 Jevaing is an experimental open-source graphics and game engine written in C++17 and built with CMake.
 
-> **Current version:** `0.0.11`
+> **Current version:** `0.0.14`
 >
 > **Codename:** `TBD`
 >
 > **Status:** early prototype, not production ready.
 
-## What 0.0.11 Adds
+## What 0.0.14 Adds
 
-Jevaing 0.0.11 introduces the first usable editor/tooling pass plus build-target foundations:
+Jevaing 0.0.14 turns the editor prototype into a more functional Unity-style mockup on top of the existing build-target foundations:
 
 - `JevaingEditor.exe` as a separate executable.
 - Dear ImGui docking UI for Project Browser, Hierarchy, Scene, Game, Inspector, Project, Console and Build Settings.
 - Project creation from a portable C/C++ CMake template.
 - Scene save/load through the existing runtime `Scene` format.
 - Edit Mode / Play Mode separation with snapshot restore.
+- Scene View camera navigation with reset, zoom, mouse wheel zoom, and middle/right mouse panning.
+- Play Mode edits run against a runtime scene copy; Stop discards runtime changes and restores the editable scene.
 - Windows Desktop x64 build target that creates an external game executable.
 - Neutral public gamepad API backed by XInput on Windows.
 - Experimental Xbox Dev Mode / UWP target entry and `Samples/XboxSmokeTest`.
@@ -46,14 +48,19 @@ The editor currently provides:
 - Hierarchy: select, create, delete and parent/child display.
 - Inspector: edit name/transform and add/remove core components.
 - Scene View: MVP editor-rendered grid/bounds preview.
+- Scene View: editor-rendered grid/bounds preview with independent view pan/zoom.
 - Project/Assets: scans assets/scenes.
 - Console: receives `Logger` events through an internal sink while stdout/stderr still work.
 - Play/Pause/Step/Stop: runs a runtime scene snapshot and restores edit state on Stop.
+- 2D/3D project mode selector for editor previews and prototyping workflow.
+- GameObject creation menu for Cube, Sphere, Capsule, Cylinder, Plane, Quad, Sprite and Circle.
+- Scene/Game run side by side in Play Mode; Scene edits affect the runtime snapshot while Game previews the result.
+- Stop always discards Play Mode changes, including deleted entities or component edits, and returns to the edit scene.
 - Windows menu: show/hide editor panels from the top menu bar.
 - Unsaved scene warning before closing the editor, closing a project or loading another project/scene.
 - Build Settings: Windows Desktop x64 build and target availability display.
 
-Known editor limitation: Scene/Game are not yet final D3D11 offscreen runtime render targets. They are MVP editor previews for selection, camera framing and spatial feedback.
+Known editor limitation: Scene/Game are not yet final D3D11 offscreen runtime render targets. They are MVP editor previews for selection, camera framing, primitive layout and physics feedback.
 
 ## Project Template
 
@@ -196,7 +203,7 @@ Core and physics:
 .\bin\Debug\JevaingSandbox.exe --physics-hierarchy-test
 ```
 
-0.0.11:
+0.0.14:
 
 ```powershell
 .\bin\Debug\JevaingSandbox.exe --build-target-info

@@ -1,13 +1,13 @@
 # Documentacion de Jevaing
 
-Version: `0.0.11`
+Version: `0.0.14`
 Estado: prototipo temprano, no listo para produccion
 
 ## 1. Vision General
 
 Jevaing es un motor experimental de videojuegos escrito en C++17 y construido con CMake. Su objetivo actual es entregar una base pequena pero usable para juegos independientes, samples externos, herramientas de editor, render 2D/3D, fisica y preparacion temprana de targets de plataforma.
 
-Jevaing 0.0.11 agrega la primera pasada usable del editor y mantiene la base de fisica de 0.0.10. El motor ahora puede compilar un ejecutable externo de juego mediante una plantilla de proyecto, y el editor puede abrir, editar, previsualizar, reproducir, pausar, avanzar frame a frame, guardar y compilar un proyecto.
+Jevaing 0.0.14 vuelve mas funcional el prototipo del editor y mantiene la base de fisica de 0.0.10. El motor puede compilar un ejecutable externo de juego mediante una plantilla de proyecto, y el editor puede abrir, editar, previsualizar, reproducir, pausar, avanzar frame a frame, guardar, compilar un proyecto, navegar la camara de Scene y descartar los cambios hechos durante Play Mode al hacer Stop.
 
 El proyecto mantiene intencionalmente APIs neutrales. El codigo de juego usa conceptos de Jevaing como `Scene`, componentes, `Graphics2D`, `Graphics3D`, `PhysicsWorld2D`, `PhysicsWorld3D` e `Input`. Detalles de plataforma o backend como Win32, DirectX, XInput, Box2D, Jolt, ImGui, UWP o GDK no se exponen en la API publica.
 
@@ -23,7 +23,7 @@ Jevaing/
 |-- geometry/            Assets locales de ejemplo.
 |-- Library/             Area de libreria runtime.
 |-- Documentation/       Area de documentacion existente.
-|-- documents/           Documentacion bilingue generada para 0.0.11.
+|-- documents/           Documentacion bilingue generada para 0.0.14.
 |-- CMakeLists.txt       Build raiz de CMake.
 |-- README.md            Resumen principal del proyecto.
 |-- THIRD_PARTY.md       Notas de dependencias de terceros.
@@ -95,7 +95,7 @@ Paneles actuales del editor:
 
 - `Project Browser`: crear o abrir proyectos.
 - `Hierarchy`: crear/seleccionar entidades y ver relaciones padre-hijo.
-- `Scene`: vista de editor para seleccion, grid y edicion de transform con mouse.
+- `Scene`: vista de editor para seleccion, grid, edicion de transform con mouse y navegacion independiente.
 - `Game`: preview del encuadre de la camara del juego.
 - `Inspector`: editar nombres, transforms y componentes principales.
 - `Project`: navegador estilo Unity para `Assets`, `Scenes` y `Source`.
@@ -106,6 +106,7 @@ Menu superior:
 
 - `File`: guardar, cerrar proyecto, detener Play Mode, salir.
 - `Edit`, `GameObject`, `Assets`, `Build`, `Help`: secciones reservadas para herramientas futuras.
+- `GameObject`: crear objetos Empty y primitivas 2D/3D como Cube, Sphere, Capsule, Cylinder, Plane, Quad, Sprite y Circle.
 - `Windows`: mostrar u ocultar paneles del editor.
 
 Controles de Play:
@@ -122,9 +123,11 @@ El editor muestra una advertencia por cambios sin guardar antes de salir, cerrar
 
 `Scene` y `Game` son ventanas separadas del editor.
 
-La vista `Scene` es una preview de editor. Dibuja un grid y bounds simples de entidades, permite seleccionar entidades con el mouse y arrastrar entidades seleccionadas en el plano X/Y mientras no se esta en Play Mode.
+La vista `Scene` es una preview de editor. Dibuja un grid y bounds simples de entidades, permite seleccionar entidades con el mouse, soporta reset/zoom/pan de la vista y permite arrastrar entidades seleccionadas en el plano X/Y tanto en Edit Mode como en el snapshot runtime de Play Mode.
 
 La vista `Game` es una preview de camara. Dibuja un marco 16:9 usando la camara de la escena como referencia de offset. Si existe una camara primaria, se prefiere esa; si no, se usa la primera entidad con `CameraComponent`. Esta vista todavia es una preview MVP dibujada por el editor y no el render target D3D11 final embebido del runtime.
+
+El editor tiene selector de modo 2D/3D en Project Browser, Scene y Build Settings. En Play Mode, `Scene` y `Game` corren lado a lado: mover, editar o borrar un objeto en `Scene` afecta solo el snapshot runtime, mientras `Game` muestra el resultado de preview. Al detener Play Mode se descartan los cambios runtime y se restaura la escena editable.
 
 ## 7. Flujo De Proyecto
 
@@ -205,7 +208,7 @@ La preview del editor actualmente dibuja representaciones simplificadas con ImGu
 
 ## 10. Fisica
 
-Jevaing 0.0.10/0.0.11 mantiene la fisica detras de APIs publicas neutrales.
+Jevaing 0.0.10/0.0.14 mantiene la fisica detras de APIs publicas neutrales.
 
 Fisica 2D:
 

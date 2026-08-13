@@ -1,0 +1,4 @@
+name=MyGame
+startupScene=Scenes/main.scene
+assetRoot=Assets
+sceneRoot=Scenes

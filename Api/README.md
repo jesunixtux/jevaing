@@ -2,7 +2,7 @@
 
 The `Api/Include/Jevaing` directory contains the headers intended for client code.
 
-As of Jevaing 0.0.11 TBD the public surface includes:
+As of Jevaing 0.0.14 TBD the public surface includes:
 
 - `Assets.h` - backend-neutral asset data types and loading helpers for `Model`, `Mesh`, `Texture2D` and `Material`.
 - `Components.h` - small scene component value types.
