@@ -15,9 +15,16 @@ namespace Jevaing::Internal
         Metal
     };
 
+    enum class RendererTestPattern
+    {
+        Triangle,
+        Penguin
+    };
+
     struct RendererConfig
     {
         RendererBackend Backend = RendererBackend::None;
+        RendererTestPattern TestPattern = RendererTestPattern::Triangle;
     };
 
     class Renderer
