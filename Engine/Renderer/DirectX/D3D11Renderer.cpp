@@ -4,8 +4,10 @@
 
 #include <d3dcompiler.h>
 
+#include <cmath>
 #include <cstddef>
 #include <string>
+#include <vector>
 
 #include "../../Core/Logger.h"
 #include "../../Core/Window.h"
@@ -19,6 +21,20 @@ namespace Jevaing::Internal
             float Position[3];
             float Color[4];
         };
+
+        struct Color
+        {
+            float R;
+            float G;
+            float B;
+            float A;
+        };
+
+        constexpr float Pi = 3.14159265358979323846f;
+
+        constexpr Color Black = { 0.035f, 0.045f, 0.060f, 1.0f };
+        constexpr Color White = { 0.92f, 0.95f, 0.98f, 1.0f };
+        constexpr Color Orange = { 1.0f, 0.52f, 0.10f, 1.0f };
 
         constexpr char ShaderSource[] = R"(
 struct VSInput
@@ -46,6 +62,123 @@ float4 PSMain(VSOutput input) : SV_TARGET
     return input.color;
 }
 )";
+
+        Vertex MakeVertex(float x, float y, const Color& color)
+        {
+            return {
+                { x, y, 0.0f },
+                { color.R, color.G, color.B, color.A }
+            };
+        }
+
+        void AppendTriangle(
+            std::vector<Vertex>& vertices,
+            float x0,
+            float y0,
+            float x1,
+            float y1,
+            float x2,
+            float y2,
+            const Color& color
+        )
+        {
+            vertices.push_back(MakeVertex(x0, y0, color));
+            vertices.push_back(MakeVertex(x1, y1, color));
+            vertices.push_back(MakeVertex(x2, y2, color));
+        }
+
+        void AppendEllipse(
+            std::vector<Vertex>& vertices,
+            float centerX,
+            float centerY,
+            float radiusX,
+            float radiusY,
+            int segments,
+            const Color& color
+        )
+        {
+            for (int segment = 0; segment < segments; ++segment)
+            {
+                const float angle0 =
+                    -2.0f * Pi * static_cast<float>(segment) /
+                    static_cast<float>(segments);
+
+                const float angle1 =
+                    -2.0f * Pi * static_cast<float>(segment + 1) /
+                    static_cast<float>(segments);
+
+                const float x0 = centerX + std::cos(angle0) * radiusX;
+                const float y0 = centerY + std::sin(angle0) * radiusY;
+                const float x1 = centerX + std::cos(angle1) * radiusX;
+                const float y1 = centerY + std::sin(angle1) * radiusY;
+
+                AppendTriangle(
+                    vertices,
+                    centerX,
+                    centerY,
+                    x0,
+                    y0,
+                    x1,
+                    y1,
+                    color
+                );
+            }
+        }
+
+        std::vector<Vertex> BuildTriangleVertices()
+        {
+            return {
+                {
+                    { 0.0f, 0.62f, 0.0f },
+                    { 1.0f, 0.25f, 0.16f, 1.0f }
+                },
+                {
+                    { 0.62f, -0.58f, 0.0f },
+                    { 0.15f, 0.72f, 1.0f, 1.0f }
+                },
+                {
+                    { -0.62f, -0.58f, 0.0f },
+                    { 0.35f, 1.0f, 0.35f, 1.0f }
+                }
+            };
+        }
+
+        std::vector<Vertex> BuildPenguinVertices()
+        {
+            std::vector<Vertex> vertices;
+            vertices.reserve(900);
+
+            // Feet are drawn first so the body naturally overlaps them.
+            AppendEllipse(vertices, -0.19f, -0.77f, 0.18f, 0.075f, 24, Orange);
+            AppendEllipse(vertices, 0.19f, -0.77f, 0.18f, 0.075f, 24, Orange);
+
+            // Main black silhouette.
+            AppendEllipse(vertices, 0.0f, -0.08f, 0.46f, 0.70f, 40, Black);
+            AppendEllipse(vertices, 0.0f, 0.46f, 0.39f, 0.36f, 36, Black);
+
+            // White belly.
+            AppendEllipse(vertices, 0.0f, -0.16f, 0.29f, 0.46f, 36, White);
+
+            // Eyes and pupils.
+            AppendEllipse(vertices, -0.13f, 0.53f, 0.075f, 0.090f, 24, White);
+            AppendEllipse(vertices, 0.13f, 0.53f, 0.075f, 0.090f, 24, White);
+            AppendEllipse(vertices, -0.13f, 0.53f, 0.030f, 0.042f, 20, Black);
+            AppendEllipse(vertices, 0.13f, 0.53f, 0.030f, 0.042f, 20, Black);
+
+            // Beak. Winding matches the DirectX test geometry.
+            AppendTriangle(
+                vertices,
+                0.0f,
+                0.30f,
+                -0.105f,
+                0.41f,
+                0.105f,
+                0.41f,
+                Orange
+            );
+
+            return vertices;
+        }
 
         bool CompileShader(
             const char* entryPoint,
@@ -101,6 +234,11 @@ float4 PSMain(VSOutput input) : SV_TARGET
 
             return true;
         }
+    }
+
+    D3D11Renderer::D3D11Renderer(RendererTestPattern testPattern)
+        : m_testPattern(testPattern)
+    {
     }
 
     D3D11Renderer::~D3D11Renderer()
@@ -180,17 +318,25 @@ float4 PSMain(VSOutput input) : SV_TARGET
             return false;
         }
 
-        if (!CreateTrianglePipeline(hwnd))
+        if (!CreateTestPipeline(hwnd))
         {
             ReleaseResources();
             return false;
         }
 
-        Logger::Info("DirectX 11 device, swap chain and ATLAS triangle pipeline initialized.");
+        const char* patternName =
+            m_testPattern == RendererTestPattern::Penguin ? "penguin" : "triangle";
+
+        Logger::Info(
+            std::string("DirectX 11 device, swap chain and ATLAS ") +
+            patternName +
+            " pipeline initialized."
+        );
+
         return true;
     }
 
-    bool D3D11Renderer::CreateTrianglePipeline(HWND hwnd)
+    bool D3D11Renderer::CreateTestPipeline(HWND hwnd)
     {
         ID3DBlob* vertexShaderBlob = nullptr;
         ID3DBlob* pixelShaderBlob = nullptr;
@@ -274,28 +420,26 @@ float4 PSMain(VSOutput input) : SV_TARGET
             return false;
         }
 
-        constexpr Vertex vertices[] = {
-            {
-                { 0.0f, 0.62f, 0.0f },
-                { 1.0f, 0.25f, 0.16f, 1.0f }
-            },
-            {
-                { 0.62f, -0.58f, 0.0f },
-                { 0.15f, 0.72f, 1.0f, 1.0f }
-            },
-            {
-                { -0.62f, -0.58f, 0.0f },
-                { 0.35f, 1.0f, 0.35f, 1.0f }
-            }
-        };
+        const std::vector<Vertex> vertices =
+            m_testPattern == RendererTestPattern::Penguin
+                ? BuildPenguinVertices()
+                : BuildTriangleVertices();
+
+        if (vertices.empty())
+        {
+            Logger::Error("ATLAS test geometry contains no vertices.");
+            return false;
+        }
+
+        m_vertexCount = static_cast<UINT>(vertices.size());
 
         D3D11_BUFFER_DESC vertexBufferDesc = {};
-        vertexBufferDesc.ByteWidth = static_cast<UINT>(sizeof(vertices));
+        vertexBufferDesc.ByteWidth = static_cast<UINT>(vertices.size() * sizeof(Vertex));
         vertexBufferDesc.Usage = D3D11_USAGE_IMMUTABLE;
         vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 
         D3D11_SUBRESOURCE_DATA vertexData = {};
-        vertexData.pSysMem = vertices;
+        vertexData.pSysMem = vertices.data();
 
         const HRESULT vertexBufferResult = m_device->CreateBuffer(
             &vertexBufferDesc,
@@ -344,7 +488,8 @@ float4 PSMain(VSOutput input) : SV_TARGET
             !m_vertexShader ||
             !m_pixelShader ||
             !m_inputLayout ||
-            !m_vertexBuffer
+            !m_vertexBuffer ||
+            m_vertexCount == 0
         )
         {
             return;
@@ -369,7 +514,7 @@ float4 PSMain(VSOutput input) : SV_TARGET
         m_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         m_context->VSSetShader(m_vertexShader, nullptr, 0);
         m_context->PSSetShader(m_pixelShader, nullptr, 0);
-        m_context->Draw(3, 0);
+        m_context->Draw(m_vertexCount, 0);
     }
 
     void D3D11Renderer::EndFrame()
@@ -396,6 +541,8 @@ float4 PSMain(VSOutput input) : SV_TARGET
         {
             m_context->ClearState();
         }
+
+        m_vertexCount = 0;
 
         if (m_vertexBuffer)
         {
