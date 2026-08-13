@@ -34,6 +34,7 @@ if(WIN32)
         JevaingEngine
         PRIVATE
             user32
+            gdi32
     )
 
 endif()
