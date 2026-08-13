@@ -9,5 +9,6 @@ namespace Jevaing::Internal
         ~Application() = default;
 
         int Run();
+        int Run(int argc, char** argv);
     };
 }
