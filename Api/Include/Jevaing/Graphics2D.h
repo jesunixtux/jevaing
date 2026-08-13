@@ -1,5 +1,8 @@
 #pragma once
 
+#include <memory>
+
+#include "Assets.h"
 #include "Types.h"
 
 namespace Jevaing
@@ -22,6 +25,13 @@ namespace Jevaing
             const Vec2& center,
             const Vec2& size,
             const Color& color
+        ) = 0;
+
+        virtual void DrawSprite(
+            const std::shared_ptr<const Texture2D>& texture,
+            const Vec2& center,
+            const Vec2& size,
+            const Color& tint
         ) = 0;
     };
 }

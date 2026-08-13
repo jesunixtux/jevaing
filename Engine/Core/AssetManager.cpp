@@ -63,6 +63,8 @@ namespace Jevaing
         {
             std::string key = ResolveAssetPath(path);
             std::replace(key.begin(), key.end(), '\\', '/');
+
+#ifdef _WIN32
             std::transform(
                 key.begin(),
                 key.end(),
@@ -72,6 +74,7 @@ namespace Jevaing
                     return static_cast<char>(std::tolower(character));
                 }
             );
+#endif
             return key;
         }
 

@@ -57,6 +57,15 @@ namespace Jevaing::Internal
             {
             }
 
+            void DrawSprite(
+                const std::shared_ptr<const Texture2D>&,
+                const Vec2&,
+                const Vec2&,
+                const Color&
+            ) override
+            {
+            }
+
             void SetCamera(const PerspectiveCamera&) override
             {
             }

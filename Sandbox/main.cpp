@@ -124,7 +124,7 @@ int main(int argc, char** argv)
     BigBearGummyDemo game;
 
     Jevaing::GameConfig config;
-    config.Title = "Jevaing 0.0.8 - TBD Sandbox";
+    config.Title = "Jevaing 0.0.9 - TBD Sandbox";
     config.Width = 1280;
     config.Height = 720;
 

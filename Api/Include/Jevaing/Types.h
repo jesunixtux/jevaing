@@ -12,6 +12,16 @@ namespace Jevaing
         float Y = 0.0f;
     };
 
+    inline Vec2 operator+(const Vec2& left, const Vec2& right)
+    {
+        return { left.X + right.X, left.Y + right.Y };
+    }
+
+    inline Vec2 operator-(const Vec2& left, const Vec2& right)
+    {
+        return { left.X - right.X, left.Y - right.Y };
+    }
+
     struct Vec3
     {
         float X = 0.0f;

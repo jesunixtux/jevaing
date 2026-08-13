@@ -222,6 +222,130 @@ namespace Jevaing::Internal
             return 2;
         }
 
+        int RunProjectTest(const std::string& path)
+        {
+            ProjectConfig config;
+            std::string error;
+
+            if (!Project::Load(path, config, error))
+            {
+                Logger::Error(error);
+                return 2;
+            }
+
+            const std::string startupScene = Project::ResolveStartupScenePath(config);
+
+            if (!std::filesystem::exists(std::filesystem::path(startupScene)))
+            {
+                Logger::Error("Project startup scene does not exist: " + startupScene);
+                return 2;
+            }
+
+            Logger::Info("[PASS] Project loaded: " + config.Name);
+            Logger::Info("StartupScene: " + startupScene);
+            Logger::Info("AssetRoot: " + Project::ResolvePath(config, config.AssetRoot));
+            return 0;
+        }
+
+        Scene CreateCliScene()
+        {
+            Scene scene("cli-scene");
+
+            const EntityId cameraId = scene.CreateEntity("Camera");
+            SceneEntity* camera = scene.FindEntity(cameraId);
+            camera->Transform.LocalTransform.Position = { 0.0f, 0.9f, -4.8f };
+            camera->Camera = CameraComponent{};
+            camera->Camera->Primary = true;
+            camera->Camera->Camera.Target = { 0.0f, 0.0f, 0.0f };
+
+            const EntityId tuxId = scene.CreateEntity("Tux");
+            SceneEntity* tux = scene.FindEntity(tuxId);
+            tux->MeshRenderer = MeshRendererComponent{};
+            tux->MeshRenderer->ModelPath = "geometry/3D/.hide/easter/tux.glb";
+            tux->MeshRenderer->ModelAsset =
+                Assets::LoadModel(ResolveTestAssetPath("geometry/3D/.hide/easter/tux.glb"));
+
+            const EntityId parentId = scene.CreateEntity("Parent");
+            SceneEntity* parent = scene.FindEntity(parentId);
+            parent->Transform.LocalTransform.Position = { 1.6f, 0.0f, 0.0f };
+
+            const EntityId childId = scene.CreateEntity("Child");
+            SceneEntity* child = scene.FindEntity(childId);
+            child->Transform.LocalTransform.Position = { 0.6f, 0.0f, 0.0f };
+            std::string parentError;
+            scene.SetParent(childId, parentId, &parentError);
+
+            return scene;
+        }
+
+        int RunHierarchyTest()
+        {
+            Scene scene("hierarchy-test");
+            const EntityId parentId = scene.CreateEntity("Parent");
+            const EntityId childId = scene.CreateEntity("Child");
+            const EntityId grandChildId = scene.CreateEntity("GrandChild");
+
+            scene.FindEntity(parentId)->Transform.LocalTransform.Position = { 2.0f, 0.0f, 0.0f };
+            scene.FindEntity(parentId)->Transform.LocalTransform.Rotation = { 0.0f, Pi * 0.5f, 0.0f };
+            scene.FindEntity(childId)->Transform.LocalTransform.Position = { 1.0f, 0.0f, 0.0f };
+            scene.FindEntity(grandChildId)->Transform.LocalTransform.Position = { 0.0f, 1.0f, 0.0f };
+
+            std::string error;
+            bool success = true;
+            success &= ReportTest(scene.SetParent(childId, parentId, &error), "Child can be parented");
+            success &= ReportTest(scene.SetParent(grandChildId, childId, &error), "GrandChild can be parented");
+
+            const Transform world = scene.GetWorldTransform(grandChildId);
+            success &= ReportTest(world.Position.X > 1.9f, "World transform follows parent movement");
+            success &= ReportTest(!scene.SetParent(parentId, grandChildId, &error), "Hierarchy cycle is rejected");
+
+            return success ? 0 : 2;
+        }
+
+        int RunSceneSerializationTest()
+        {
+            Scene scene("serialization-test");
+            const EntityId cameraId = scene.CreateEntityWithId(10, "Camera");
+            SceneEntity* camera = scene.FindEntity(cameraId);
+            camera->Transform.LocalTransform.Position = { 0.0f, 1.0f, -5.0f };
+            camera->Camera = CameraComponent{};
+            camera->Camera->Primary = true;
+
+            const EntityId childId = scene.CreateEntityWithId(20, "Child");
+            scene.FindEntity(childId)->Transform.LocalTransform.Position = { 1.0f, 2.0f, 3.0f };
+            std::string error;
+            scene.SetParent(childId, cameraId, &error);
+
+            const std::filesystem::path scenePath =
+                std::filesystem::temp_directory_path() / "jevaing-scene-serialization.scene";
+
+            if (!scene.Save(scenePath.string(), error))
+            {
+                Logger::Error(error);
+                return 2;
+            }
+
+            Scene loaded;
+
+            if (!Scene::LoadFromFile(scenePath.string(), ".", loaded, error))
+            {
+                Logger::Error(error);
+                return 2;
+            }
+
+            std::error_code removeError;
+            std::filesystem::remove(scenePath, removeError);
+
+            bool success = true;
+            success &= ReportTest(loaded.GetEntities().size() == 2, "Scene entity count survives save/load");
+            success &= ReportTest(loaded.FindEntity(10) != nullptr, "EntityId 10 survives save/load");
+            success &= ReportTest(loaded.FindEntityByName("Child") != nullptr, "Entity name survives save/load");
+            success &= ReportTest(loaded.FindEntity(20)->Parent == 10, "Parent relationship survives save/load");
+            success &= ReportTest(loaded.FindEntity(10)->Camera.has_value(), "Camera component survives save/load");
+
+            return success ? 0 : 2;
+        }
+
         int RunSelfTests()
         {
             Logger::Info("Running Jevaing self-tests...");
@@ -415,6 +539,21 @@ namespace Jevaing::Internal
             return RunAssetErrorTest();
         }
 
+        if (options.ProjectTest)
+        {
+            return RunProjectTest(options.ProjectTestPath);
+        }
+
+        if (options.HierarchyTest)
+        {
+            return RunHierarchyTest();
+        }
+
+        if (options.SceneSerializationTest)
+        {
+            return RunSceneSerializationTest();
+        }
+
         if (options.ShowRendererInfo)
         {
             PrintRendererInfo();
@@ -432,7 +571,11 @@ namespace Jevaing::Internal
             (options.MaterialTest ? 1 : 0) +
             (options.LightingTest ? 1 : 0) +
             (options.MultiModelTest ? 1 : 0) +
-            (options.Mixed2D3DTest ? 1 : 0);
+            (options.Mixed2D3DTest ? 1 : 0) +
+            (options.SceneTest ? 1 : 0) +
+            (options.MouseTest ? 1 : 0) +
+            (options.SpriteTest ? 1 : 0) +
+            (options.GpuMeshTest ? 1 : 0);
 
         if (graphicsTestCount > 1)
         {
@@ -451,7 +594,11 @@ namespace Jevaing::Internal
             options.MaterialTest ||
             options.LightingTest ||
             options.MultiModelTest ||
-            options.Mixed2D3DTest;
+            options.Mixed2D3DTest ||
+            options.SceneTest ||
+            options.MouseTest ||
+            options.SpriteTest ||
+            options.GpuMeshTest;
 
         if (options.RuntimeTest && graphicsTestRequested)
         {
@@ -587,9 +734,16 @@ namespace Jevaing::Internal
             }
         }
 
-        if (options.TextureTest || options.MaterialTest)
+        if (options.TextureTest || options.MaterialTest || options.SpriteTest)
         {
             testTexture = Assets::CreateCheckerTexture();
+        }
+
+        Scene cliScene;
+
+        if (options.SceneTest)
+        {
+            cliScene = CreateCliScene();
         }
 
         WindowConfig windowConfig;
@@ -652,9 +806,24 @@ namespace Jevaing::Internal
         {
             rendererConfig.TestPattern = RendererTestPattern::Mixed2D3D;
         }
+        else if (options.SpriteTest)
+        {
+            rendererConfig.TestPattern = RendererTestPattern::Sprite;
+        }
+        else if (options.GpuMeshTest)
+        {
+            rendererConfig.TestPattern = RendererTestPattern::GpuMesh;
+        }
+        else if (options.MouseTest)
+        {
+            rendererConfig.TestPattern = RendererTestPattern::Mixed2D3D;
+        }
         else if (options.GraphicsTest || !game)
         {
-            rendererConfig.TestPattern = RendererTestPattern::Triangle;
+            rendererConfig.TestPattern =
+                options.SceneTest
+                    ? RendererTestPattern::None
+                    : RendererTestPattern::Triangle;
         }
         else
         {
@@ -719,6 +888,22 @@ namespace Jevaing::Internal
         else if (options.Mixed2D3DTest)
         {
             Logger::Info("Mixed 2D + 3D test enabled.");
+        }
+        else if (options.SceneTest)
+        {
+            Logger::Info("Scene test enabled.");
+        }
+        else if (options.MouseTest)
+        {
+            Logger::Info("Mouse input test enabled.");
+        }
+        else if (options.SpriteTest)
+        {
+            Logger::Info("SpriteRenderer2D test enabled.");
+        }
+        else if (options.GpuMeshTest)
+        {
+            Logger::Info("Persistent GPU mesh resource test enabled.");
         }
         else if (options.GraphicsTest)
         {
@@ -808,6 +993,20 @@ namespace Jevaing::Internal
                 ++updateCalls;
             }
 
+            if (options.SceneTest)
+            {
+                SceneEntity* parent = cliScene.FindEntityByName("Parent");
+
+                if (parent)
+                {
+                    parent->Transform.LocalTransform.Rotation.Y +=
+                        static_cast<float>(deltaTime);
+                }
+
+                cliScene.Update(deltaTime);
+                ++updateCalls;
+            }
+
             if (drawable)
             {
                 renderer->BeginFrame();
@@ -816,6 +1015,13 @@ namespace Jevaing::Internal
                 {
                     game->OnRender(static_cast<Graphics2D&>(*renderer));
                     game->OnRender(static_cast<Graphics3D&>(*renderer));
+                    ++renderCalls;
+                }
+
+                if (options.SceneTest)
+                {
+                    cliScene.Render(static_cast<Graphics2D&>(*renderer));
+                    cliScene.Render(static_cast<Graphics3D&>(*renderer));
                     ++renderCalls;
                 }
 
@@ -889,6 +1095,42 @@ namespace Jevaing::Internal
         else if (exitCode == 0 && options.Mixed2D3DTest)
         {
             Logger::Info("[PASS] Mixed 2D + 3D test completed.");
+        }
+        else if (exitCode == 0 && options.SceneTest)
+        {
+            Logger::Info("[PASS] Scene test completed.");
+        }
+        else if (exitCode == 0 && options.MouseTest)
+        {
+            const Vec2 mouse = Input::GetMousePosition();
+            Logger::Info(
+                "[PASS] Mouse test completed. Last mouse position: " +
+                std::to_string(mouse.X) +
+                ", " +
+                std::to_string(mouse.Y)
+            );
+        }
+        else if (exitCode == 0 && options.SpriteTest)
+        {
+            Logger::Info("[PASS] SpriteRenderer2D test completed.");
+        }
+        else if (exitCode == 0 && options.GpuMeshTest)
+        {
+            const std::size_t meshResources =
+                renderer->GetDebugMeshResourceCreateCount();
+
+            if (meshResources <= 1)
+            {
+                Logger::Info("[PASS] GPU mesh resource cache reused persistent buffers.");
+            }
+            else
+            {
+                Logger::Error(
+                    "[FAIL] GPU mesh test created too many mesh resources: " +
+                    std::to_string(meshResources)
+                );
+                exitCode = 2;
+            }
         }
         else if (exitCode == 0 && options.GraphicsTest)
         {

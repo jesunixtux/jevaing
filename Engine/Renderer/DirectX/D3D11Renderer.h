@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -26,6 +27,7 @@ namespace Jevaing::Internal
     struct D3D11ObjectConstants
     {
         Mat4 Model = Mat4::Identity();
+        Mat4 NormalMatrix = Mat4::Identity();
         Mat4 ModelViewProjection = Mat4::Identity();
         float BaseColor[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
         float LightDirection[4] = { -0.35f, -0.85f, 0.40f, 0.0f };
@@ -35,10 +37,26 @@ namespace Jevaing::Internal
 
     struct D3D11DrawBatch
     {
+        const Mesh* MeshData = nullptr;
+        std::size_t MeshSignature = 0;
+        D3D11ObjectConstants Constants;
+        std::shared_ptr<const Texture2D> Texture;
+    };
+
+    struct D3D112DDrawBatch
+    {
         std::size_t StartVertex = 0;
         std::size_t VertexCount = 0;
         D3D11ObjectConstants Constants;
         std::shared_ptr<const Texture2D> Texture;
+    };
+
+    struct D3D11MeshResource
+    {
+        ID3D11Buffer* VertexBuffer = nullptr;
+        ID3D11Buffer* IndexBuffer = nullptr;
+        std::uint32_t IndexCount = 0;
+        std::size_t Signature = 0;
     };
 
     class D3D11Renderer final : public Renderer
@@ -67,6 +85,13 @@ namespace Jevaing::Internal
             const Color& color
         ) override;
 
+        void DrawSprite(
+            const std::shared_ptr<const Texture2D>& texture,
+            const Vec2& center,
+            const Vec2& size,
+            const Color& tint
+        ) override;
+
         void SetCamera(const PerspectiveCamera& camera) override;
 
         void DrawCube(
@@ -84,6 +109,7 @@ namespace Jevaing::Internal
 
         const char* GetName() const override;
         RendererBackend GetBackend() const override;
+        std::size_t GetDebugMeshResourceCreateCount() const override;
 
     private:
         bool Create2DPipeline();
@@ -102,6 +128,13 @@ namespace Jevaing::Internal
         void Flush2DDrawCommands();
         void Flush3DDrawCommands();
         void ReleaseResources();
+        bool GetOrCreateMeshResource(
+            const Mesh& mesh,
+            D3D11MeshResource*& resource
+        );
+        static std::size_t CalculateMeshSignature(const Mesh& mesh);
+        static std::string GetTextureCacheKey(const Texture2D& texture);
+        static Mat4 CalculateNormalMatrix(const Transform& transform);
 
     private:
         RendererTestPattern m_testPattern = RendererTestPattern::None;
@@ -110,9 +143,11 @@ namespace Jevaing::Internal
         std::shared_ptr<const Texture2D> m_testTexture;
         DirectionalLight m_directionalLight;
         std::vector<D3D11Vertex> m_frame2DVertices;
-        std::vector<D3D11Vertex> m_frame3DVertices;
+        std::vector<D3D112DDrawBatch> m_2DDrawBatches;
         std::vector<D3D11DrawBatch> m_3DDrawBatches;
-        std::unordered_map<const Texture2D*, ID3D11ShaderResourceView*> m_textureViews;
+        std::unordered_map<const Mesh*, D3D11MeshResource> m_meshResources;
+        std::unordered_map<std::string, ID3D11ShaderResourceView*> m_textureViews;
+        std::size_t m_debugMeshResourceCreateCount = 0;
         std::size_t m_vertexCapacity = 0;
         std::uint64_t m_frameIndex = 0;
         PerspectiveCamera m_camera;

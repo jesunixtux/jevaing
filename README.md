@@ -2,96 +2,203 @@
 
 Jevaing is an experimental open-source graphics and game engine written in C++17 and built with CMake.
 
-> **Current version:** `0.0.8`
+> **Current version:** `0.0.9`
 >
 > **Codename:** `TBD`
 >
 > **Status:** early prototype, not production ready.
 
-## What 0.0.8 changes
+## What 0.0.9 Changes
 
-Jevaing 0.0.8 turns the first 3D model experiments into a reusable asset foundation.
+Jevaing 0.0.9 moves the engine from internal demos toward real external prototypes.
 
-The intended path is now:
+The main proof is `Samples/Minimal3D`: it has its own `CMakeLists.txt`, `jevaing.project`, `Scenes/main.scene`, assets, and `Source/Game.cpp`. It builds a standalone `Minimal3D.exe` without modifying `Sandbox/main.cpp`.
+
+Conceptually:
 
 ```text
-external file
-    -> AssetManager
-    -> Model / Mesh / Texture2D / Material
-    -> Graphics3D
+Project
+    -> Scene
+    -> Entity + Components
+    -> Assets / Input
+    -> Graphics2D / Graphics3D
     -> Renderer
-    -> DirectX 11
+    -> Game executable
 ```
 
-DirectX 11 does not load GLB, FBX, PNG or JPG files. Assimp and stb_image are kept behind Jevaing loader boundaries, and the renderer receives backend-neutral Jevaing data.
+## Creating Your First Jevaing Prototype
 
-New 0.0.8 foundations:
+Use the Minimal3D sample as the template:
 
-- `Jevaing::Mesh` with vertices, indices, normals, UV0, vertex color and bounds.
-- `Jevaing::Vertex3D`.
-- `Jevaing::Texture2D` with RGBA8 pixel data.
-- `Jevaing::Material` with base color and optional base-color texture.
-- `Jevaing::Model` with multiple meshes and materials.
-- `Jevaing::DirectionalLight`.
-- `Jevaing::Assets::LoadModel`.
-- `Jevaing::Assets::LoadTexture2D`.
-- `Jevaing::Assets::CreateCheckerTexture`.
-- `Graphics3D::DrawMesh`.
-- `Graphics3D::SetDirectionalLight`.
-- `DrawCube` remains available and is now backed by Jevaing mesh primitives.
+```powershell
+cmake -S Samples\Minimal3D -B build-minimal3d
+cmake --build build-minimal3d --config Debug
+.\build-minimal3d\bin\Debug\Minimal3D.exe
+```
 
-Supported model formats in this prototype:
-
-- `.glb`
-- `.gltf`
-- `.fbx`
-
-Supported texture file formats:
-
-- `.png`
-- `.jpg`
-- `.jpeg`
-
-## Asset System
-
-`AssetManager` caches loaded models and textures by normalized path. Loading the same path repeatedly while the asset is still referenced returns the cached object instead of reimporting the file.
-
-Assets use shared ownership:
+`Samples/Minimal3D/Source/Game.cpp` includes only:
 
 ```cpp
+#include <Jevaing/Jevaing.h>
+```
+
+and links with:
+
+```cmake
+target_link_libraries(Minimal3D PRIVATE JevaingEngine)
+```
+
+It does not include Win32, DirectX, Assimp, stb, or engine-private headers.
+
+## Project System
+
+Project files use a small `key=value` format:
+
+```text
+name=Minimal3D
+startupScene=Scenes/main.scene
+assetRoot=Assets
+sceneRoot=Scenes
+```
+
+Public API:
+
+```cpp
+Jevaing::ProjectConfig config;
 std::string error;
-auto model = Jevaing::Assets::LoadModel(
-    "geometry/3D/.hide/easter/tux.glb",
-    &error
-);
+Jevaing::Project::Load("jevaing.project", config, error);
 ```
 
-When all `shared_ptr` references are released, the cached weak reference can expire and the asset may be imported again on a later request. This keeps the 0.0.8 cache small and RAII-friendly without a global lifetime trap.
+`Project::ResolveStartupScenePath` and `Project::ResolveAssetPath` resolve project-relative paths without personal absolute paths.
 
-## Graphics3D
+## Scene Format
 
-The public 3D API now supports backend-neutral mesh drawing:
+Scenes use a simple text format in 0.0.9:
+
+```text
+scene=Minimal3D
+
+[entity]
+id=1
+name=Camera
+parent=0
+position=0,1,-5
+rotation=0,0,0
+scale=1,1,1
+camera.primary=1
+camera.fov=1.04719755
+camera.near=0.1
+camera.far=100
+[/entity]
+
+[entity]
+id=2
+name=Tux
+parent=0
+position=0,0,0
+rotation=0,0,0
+scale=1,1,1
+mesh.model=Models/tux.glb
+[/entity]
+```
+
+The scene stores IDs, names, local transforms, parent relationships, camera data, mesh references, material color overrides, and sprite references. It stores asset paths, not vertex data or GPU resources.
+
+## Scene And Entity
+
+Public scene API includes:
+
+- `Scene::CreateEntity`
+- `Scene::CreateEntityWithId`
+- `Scene::DestroyEntity`
+- `Scene::FindEntity`
+- `Scene::FindEntityByName`
+- `Scene::SetParent`
+- `Scene::RemoveParent`
+- `Scene::GetWorldTransform`
+- `Scene::LoadFromFile`
+- `Scene::Save`
+- `Scene::Update`
+- `Scene::Render`
+
+`EntityId` is a serializable `uint64_t`. `0` is reserved as `InvalidEntityId`.
+
+## Components
+
+0.0.9 keeps components small and value-oriented:
+
+- `TransformComponent`
+- `CameraComponent`
+- `MeshRendererComponent`
+- `SpriteRenderer2DComponent`
+
+There is no full ECS, reflection system, scripting, prefab system, physics, or editor yet.
+
+## Transform Hierarchy
+
+Entities can be parented:
+
+```text
+Parent
+    -> Child
+        -> GrandChild
+```
+
+`Scene::SetParent` rejects missing entities, self-parenting, and cycles. `GetWorldTransform` combines parent transforms so children follow parent movement/rotation/scale.
+
+## Rendering
+
+0.0.9 keeps the public rendering API backend-neutral:
+
+- `Graphics3D::DrawMesh`
+- `Graphics3D::DrawCube`
+- `Graphics3D::SetDirectionalLight`
+- `Graphics2D::DrawSprite`
+- `Graphics2D::DrawQuad`
+- `Graphics2D::DrawTriangle`
+
+`MeshRendererComponent` renders imported assets from 0.0.8. `SpriteRenderer2DComponent` renders a `Texture2D` through `DrawSprite`.
+
+## GPU Mesh Resources
+
+DirectX 11 now creates persistent renderer-side mesh resources:
+
+```text
+CPU Mesh
+    -> D3D11 vertex buffer
+    -> D3D11 index buffer
+    -> DrawIndexed
+```
+
+The public API still sees `Jevaing::Mesh`; D3D11 buffers are private to the renderer. `--gpu-mesh-test` renders the same mesh repeatedly and checks that buffers are reused instead of recreated every frame.
+
+Texture SRVs are now cached by a stable texture key derived from source path, size and format, not by raw CPU object address.
+
+## 0.0.8 Debt Fixed
+
+- Imported vertices now fall back to white vertex color when material color owns the real color, avoiding `BaseColor * BaseColor`.
+- DirectX uses a normal matrix path for non-uniform scale instead of transforming normals directly by the full model matrix.
+- Texture GPU cache no longer keys by raw `Texture2D*`.
+- Asset cache lowercases paths only on Windows.
+
+## Input
+
+Mouse input is public and backend-neutral:
+
+- `Input::GetMousePosition`
+- `Input::GetMouseDelta`
+- `Input::GetMouseWheelDelta`
+- `Input::IsMouseButtonDown`
+- `Input::IsMouseButtonPressed`
+- `Input::IsMouseButtonReleased`
+
+`InputMap` is a tiny action layer:
 
 ```cpp
-Jevaing::Material material;
-material.BaseColor = { 0.25f, 0.72f, 1.0f, 1.0f };
-
-Jevaing::Transform transform;
-graphics.DrawMesh(mesh, transform, material);
+Jevaing::InputMap input;
+input.Bind("MoveForward", Jevaing::Key::W);
+input.Bind("Boost", Jevaing::MouseButton::Left);
 ```
-
-Directional lighting is intentionally simple Lambert/diffuse lighting:
-
-```cpp
-Jevaing::DirectionalLight light;
-light.Direction = { -0.35f, -0.85f, 0.40f };
-light.Color = { 1.0f, 0.96f, 0.88f, 1.0f };
-light.Intensity = 1.0f;
-
-graphics.SetDirectionalLight(light);
-```
-
-This is not a PBR renderer. It exists to prove that normals survive import and reach the shader.
 
 ## Command-line Tests
 
@@ -107,13 +214,7 @@ Existing tests remain available:
 .\bin\Debug\JevaingSandbox.exe --graphics-test-3d
 .\bin\Debug\JevaingSandbox.exe --penguin-test-3d
 .\bin\Debug\JevaingSandbox.exe --gummy3d-test
-```
-
-New 0.0.8 tests:
-
-```powershell
 .\bin\Debug\JevaingSandbox.exe --model-test "geometry\3D\.hide\easter\tux.glb"
-.\bin\Debug\JevaingSandbox.exe --model-test "geometry\3D\.hide\easter\gummybear.fbx"
 .\bin\Debug\JevaingSandbox.exe --texture-test
 .\bin\Debug\JevaingSandbox.exe --material-test
 .\bin\Debug\JevaingSandbox.exe --lighting-test
@@ -124,156 +225,21 @@ New 0.0.8 tests:
 .\bin\Debug\JevaingSandbox.exe --mixed-2d-3d-test
 ```
 
-Aliases:
-
-```text
---penguin-test-3d = --model-test geometry/3D/.hide/easter/tux.glb
---gummy3d-test    = --model-test geometry/3D/.hide/easter/gummybear.fbx
-```
-
-`--asset-info` is headless and prints available model data such as path, format, mesh count, vertices, indices, triangles, material count, texture references, normals, UV0 and bounds.
-
-## Interactive Sandbox
-
-Build and run:
+New 0.0.9 tests:
 
 ```powershell
-git clone https://github.com/jesunixtux/jevaing.git
-cd jevaing
-cmake -S . -B build
-cmake --build build --config Debug
-.\bin\Debug\JevaingSandbox.exe
+.\bin\Debug\JevaingSandbox.exe --scene-test
+.\bin\Debug\JevaingSandbox.exe --scene-serialization-test
+.\bin\Debug\JevaingSandbox.exe --hierarchy-test
+.\bin\Debug\JevaingSandbox.exe --mouse-test
+.\bin\Debug\JevaingSandbox.exe --sprite-test
+.\bin\Debug\JevaingSandbox.exe --gpu-mesh-test
+.\bin\Debug\JevaingSandbox.exe --project-test "Samples\Minimal3D\jevaing.project"
 ```
 
-The default Sandbox opens:
+Visual tests should be inspected by a person. A passing exit code means the runtime initialized, ran and shut down cleanly.
 
-```text
-Jevaing 0.0.8 - TBD Sandbox
-```
-
-Controls:
-
-| Input | Action |
-|---|---|
-| `WASD` | Move the cube |
-| Arrow keys | Rotate the cube |
-| `Space` | Change the cube color while held |
-| `ESC` | Close the window |
-
-The Sandbox remains a public-API client. It does not include Win32 or DirectX headers.
-
-## Public API Snapshot
-
-The public client API currently includes:
-
-```text
-Jevaing::Game
-Jevaing::GameConfig
-Jevaing::Graphics2D
-Jevaing::Graphics3D
-Jevaing::Vec2
-Jevaing::Vec3
-Jevaing::Mat4
-Jevaing::Transform
-Jevaing::PerspectiveCamera
-Jevaing::Color
-Jevaing::Mesh
-Jevaing::Vertex3D
-Jevaing::Model
-Jevaing::Material
-Jevaing::Texture2D
-Jevaing::DirectionalLight
-Jevaing::Assets
-Jevaing::Key
-Jevaing::Input
-Jevaing::Run(...)
-Jevaing::GetVersion()
-Jevaing::GetCodename()
-```
-
-These APIs may change while Jevaing is below version 1.0.
-
-## Repository Structure
-
-```text
-jevaing/
-|-- Api/
-|   |-- Include/Jevaing/
-|       |-- Assets.h
-|       |-- Game.h
-|       |-- Graphics2D.h
-|       |-- Graphics3D.h
-|       |-- Input.h
-|       |-- Jevaing.h
-|       |-- Types.h
-|
-|-- Engine/
-|   |-- Core/
-|   |   |-- Application.*
-|   |   |-- AssetManager.cpp
-|   |   |-- CommandLine.*
-|   |   |-- Input.*
-|   |   |-- Logger.*
-|   |   |-- Timer.*
-|   |   |-- Version.*
-|   |   |-- Window.*
-|   |
-|   |-- Platform/Windows/
-|   |-- Renderer/
-|       |-- Renderer.*
-|       |-- DirectX/D3D11Renderer.*
-|
-|-- geometry/
-|   |-- 3D/
-|       |-- Mesh.h
-|       |-- ModelLoader.*
-|       |-- TextureLoader.*
-|       |-- Primitives/Cube.*
-|       |-- .hide/easter/
-|
-|-- Sandbox/
-|-- CMakeLists.txt
-|-- README.md
-|-- THIRD_PARTY.md
-```
-
-## Dependencies
-
-Required on Windows:
-
-- CMake 3.20 or newer.
-- C++17-compatible compiler.
-- Windows SDK.
-- MSVC / Visual Studio Build Tools or another compatible Windows C++ toolchain.
-
-Third-party dependencies:
-
-- Assimp 6.0.5 for model import.
-- stb_image pinned by commit for PNG/JPG decoding.
-
-CMake first looks for an installed Assimp package and otherwise fetches the pinned Assimp release. stb is fetched from a pinned upstream commit. Neither dependency is exposed through the DirectX renderer API.
-
-## Current Limitations
-
-0.0.8 is a static asset/rendering foundation, not a complete engine.
-
-Not implemented yet:
-
-- skeletal animation, bones, skinning or animation graphs;
-- PBR materials, tangents, bitangents, roughness/metallic pipeline;
-- embedded GLB texture extraction;
-- missing external model texture packaging;
-- shadow maps or advanced lighting;
-- sprite/font/text rendering;
-- scene system, ECS or editor;
-- physics, scripting, audio or networking;
-- Vulkan, Metal, Linux or macOS backends.
-
-If a model references an external texture file that is not present next to the model, Jevaing reports the texture load error and renders the material without that texture. The current `gummybear.fbx` references `temp.fbm/texture_0.png`, which is not present in the repository.
-
-## Windows/MSVC Validation Battery
-
-Use this exact battery from a normal checkout:
+## Windows/MSVC Validation
 
 ```powershell
 git pull origin main
@@ -284,73 +250,51 @@ cmake --build build --config Debug --clean-first
 .\bin\Debug\JevaingSandbox.exe --version
 .\bin\Debug\JevaingSandbox.exe --self-test
 .\bin\Debug\JevaingSandbox.exe --runtime-test
-.\bin\Debug\JevaingSandbox.exe --renderer-info
-
-.\bin\Debug\JevaingSandbox.exe --graphics-test
-.\bin\Debug\JevaingSandbox.exe --graphics-test-penguin
-.\bin\Debug\JevaingSandbox.exe --graphics-test-3d
-
-.\bin\Debug\JevaingSandbox.exe --penguin-test-3d
-.\bin\Debug\JevaingSandbox.exe --gummy3d-test
-
-.\bin\Debug\JevaingSandbox.exe --model-test "geometry\3D\.hide\easter\tux.glb"
-.\bin\Debug\JevaingSandbox.exe --model-test "geometry\3D\.hide\easter\gummybear.fbx"
-
-.\bin\Debug\JevaingSandbox.exe --texture-test
-.\bin\Debug\JevaingSandbox.exe --material-test
-.\bin\Debug\JevaingSandbox.exe --lighting-test
-.\bin\Debug\JevaingSandbox.exe --multi-model-test
-
 .\bin\Debug\JevaingSandbox.exe --asset-cache-test
 .\bin\Debug\JevaingSandbox.exe --asset-error-test
 
-.\bin\Debug\JevaingSandbox.exe --asset-info "geometry\3D\.hide\easter\tux.glb"
+.\bin\Debug\JevaingSandbox.exe --scene-test
+.\bin\Debug\JevaingSandbox.exe --scene-serialization-test
+.\bin\Debug\JevaingSandbox.exe --hierarchy-test
+.\bin\Debug\JevaingSandbox.exe --sprite-test
+.\bin\Debug\JevaingSandbox.exe --gpu-mesh-test
+.\bin\Debug\JevaingSandbox.exe --project-test "Samples\Minimal3D\jevaing.project"
 
-.\bin\Debug\JevaingSandbox.exe --mixed-2d-3d-test
+cmake -S Samples\Minimal3D -B build-minimal3d
+cmake --build build-minimal3d --config Debug
+.\build-minimal3d\bin\Debug\Minimal3D.exe --frames 180
 ```
 
-Visual tests should be inspected by a person. A passing exit code means the engine initialized, ran the frame loop and shut down cleanly; it does not prove the image looked correct.
+## Repository Structure
 
-## Roadmap
+```text
+jevaing/
+|-- Api/Include/Jevaing/
+|   |-- Assets.h
+|   |-- Components.h
+|   |-- Entity.h
+|   |-- Game.h
+|   |-- Graphics2D.h
+|   |-- Graphics3D.h
+|   |-- Input.h
+|   |-- Jevaing.h
+|   |-- Project.h
+|   |-- Scene.h
+|   |-- Types.h
+|-- Engine/
+|-- geometry/
+|-- Sandbox/
+|-- Samples/Minimal3D/
+```
 
-Completed foundations:
+## Current Limitations
 
-- 0.0.1: CMake/C++ core and Win32 window.
-- 0.0.2: window abstraction, logger, timer and delta time.
-- 0.0.3: renderer abstraction and Null Renderer.
-- 0.0.4: DirectX 11 device/swap chain and CLI smoke tests.
-- 0.0.5: runtime HLSL shaders and first GPU triangle.
-- 0.0.6: public `Game`, input and `Graphics2D`.
-- 0.0.7: `Graphics3D`, math types, depth buffer and `DrawCube`.
-- 0.0.8: asset, mesh, material, texture and generic model test foundation.
-
-Next useful foundations:
-
-- Mouse input.
-- Gamepad input.
-- Sprite and text drawing.
-- 2D camera/world coordinates.
-- Stronger GPU mesh/resource lifetime model.
-- Scene foundation.
-- Audio layer.
-- Vulkan backend.
-- Metal backend.
-- Automated CI on supported platforms.
-
-## Design Principles
-
-- Core/client code should not require OS-specific types.
-- Platform code belongs in `Engine/Platform`.
-- Renderer backend code belongs in `Engine/Renderer`.
-- Asset importers belong behind neutral Jevaing data types.
-- DirectX, Vulkan and Metal should not know how to parse external asset formats.
-- Unsupported features should fail explicitly.
-- New systems should come with concrete CLI validation.
+- Minimal2D was not added in 0.0.9; Minimal3D external build was prioritized.
+- Scene format is intentionally simple text, not full JSON.
+- No editor, prefab system, scripting, physics, audio, networking, particles or gamepad.
+- No skeletal animation, PBR, shadows, Vulkan, Metal, Linux or macOS backend.
+- GPU mesh cache is a first DirectX implementation and may need stronger asset lifetime handles later.
 
 ## License
 
 Jevaing is licensed under the MIT License.
-
-Copyright (c) 2026 jesunixtux.
-
-See [`LICENSE`](LICENSE) for the full license text.

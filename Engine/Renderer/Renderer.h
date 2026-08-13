@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <string>
 
@@ -29,7 +30,10 @@ namespace Jevaing::Internal
         Material,
         Lighting,
         MultiModel,
-        Mixed2D3D
+        Mixed2D3D,
+        Scene,
+        Sprite,
+        GpuMesh
     };
 
     struct RendererConfig
@@ -52,6 +56,10 @@ namespace Jevaing::Internal
         virtual void EndFrame() = 0;
         virtual const char* GetName() const = 0;
         virtual RendererBackend GetBackend() const = 0;
+        virtual std::size_t GetDebugMeshResourceCreateCount() const
+        {
+            return 0;
+        }
 
         static std::unique_ptr<Renderer> Create(
             const RendererConfig& config,

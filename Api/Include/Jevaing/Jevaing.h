@@ -1,11 +1,15 @@
 #pragma once
 
 #include "Assets.h"
+#include "Components.h"
+#include "Entity.h"
 #include "Game.h"
 #include "Graphics2D.h"
 #include "Graphics3D.h"
 #include "Input.h"
 #include "Types.h"
+#include "Project.h"
+#include "Scene.h"
 
 namespace Jevaing
 {

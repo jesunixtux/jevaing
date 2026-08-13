@@ -25,12 +25,20 @@ namespace Jevaing::Internal
         bool AssetErrorTest = false;
         bool AssetInfo = false;
         bool Mixed2D3DTest = false;
+        bool SceneTest = false;
+        bool SceneSerializationTest = false;
+        bool HierarchyTest = false;
+        bool MouseTest = false;
+        bool SpriteTest = false;
+        bool GpuMeshTest = false;
+        bool ProjectTest = false;
         bool RuntimeTest = false;
         bool HasFrameLimit = false;
         std::uint64_t FrameLimit = 0;
         std::string Renderer;
         std::string ModelTestPath;
         std::string AssetInfoPath;
+        std::string ProjectTestPath;
     };
 
     bool ParseCommandLine(

@@ -1,6 +1,9 @@
 .vs/
 build/
+build-minimal3d/
 out/
+
+Samples/Minimal3D/Assets/Models/gummybear.fbx
 
 bin/Debug/
 bin/Release/

@@ -320,8 +320,6 @@ namespace Jevaing::Internal::Geometry3D
             mesh.Vertices.reserve(sourceMesh->mNumVertices);
             mesh.Indices.reserve(sourceMesh->mNumFaces * 3);
 
-            const Material& material = model.Materials[mesh.MaterialIndex];
-
             for (unsigned int vertexIndex = 0; vertexIndex < sourceMesh->mNumVertices; ++vertexIndex)
             {
                 const aiVector3D& sourcePosition = sourceMesh->mVertices[vertexIndex];
@@ -335,7 +333,11 @@ namespace Jevaing::Internal::Geometry3D
                     position,
                     ReadNormal(sourceMesh, vertexIndex),
                     ReadUV0(sourceMesh, vertexIndex),
-                    ReadVertexColor(sourceMesh, vertexIndex, material.BaseColor)
+                    ReadVertexColor(
+                        sourceMesh,
+                        vertexIndex,
+                        { 1.0f, 1.0f, 1.0f, 1.0f }
+                    )
                 });
 
                 ExpandBounds(mesh.Bounds, position);

@@ -3,6 +3,7 @@
 #include "WindowsWindow.h"
 
 #include <string>
+#include <windowsx.h>
 
 #include "../../Core/InputState.h"
 
@@ -247,6 +248,52 @@ namespace Jevaing::Platform
 
                 break;
             }
+
+            case WM_MOUSEMOVE:
+            {
+                Internal::InputState::SetMousePosition(
+                    static_cast<float>(GET_X_LPARAM(lParam)),
+                    static_cast<float>(GET_Y_LPARAM(lParam))
+                );
+                break;
+            }
+
+            case WM_LBUTTONDOWN:
+                SetCapture(hwnd);
+                Internal::InputState::SetMouseButtonState(MouseButton::Left, true);
+                break;
+
+            case WM_LBUTTONUP:
+                Internal::InputState::SetMouseButtonState(MouseButton::Left, false);
+                ReleaseCapture();
+                break;
+
+            case WM_RBUTTONDOWN:
+                SetCapture(hwnd);
+                Internal::InputState::SetMouseButtonState(MouseButton::Right, true);
+                break;
+
+            case WM_RBUTTONUP:
+                Internal::InputState::SetMouseButtonState(MouseButton::Right, false);
+                ReleaseCapture();
+                break;
+
+            case WM_MBUTTONDOWN:
+                SetCapture(hwnd);
+                Internal::InputState::SetMouseButtonState(MouseButton::Middle, true);
+                break;
+
+            case WM_MBUTTONUP:
+                Internal::InputState::SetMouseButtonState(MouseButton::Middle, false);
+                ReleaseCapture();
+                break;
+
+            case WM_MOUSEWHEEL:
+                Internal::InputState::AddMouseWheelDelta(
+                    static_cast<float>(GET_WHEEL_DELTA_WPARAM(wParam)) /
+                    static_cast<float>(WHEEL_DELTA)
+                );
+                break;
 
             case WM_KILLFOCUS:
             {

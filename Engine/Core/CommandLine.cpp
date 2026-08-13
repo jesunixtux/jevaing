@@ -104,6 +104,41 @@ namespace Jevaing::Internal
             {
                 options.Mixed2D3DTest = true;
             }
+            else if (argument == "--scene-test")
+            {
+                options.SceneTest = true;
+            }
+            else if (argument == "--scene-serialization-test")
+            {
+                options.SceneSerializationTest = true;
+            }
+            else if (argument == "--hierarchy-test")
+            {
+                options.HierarchyTest = true;
+            }
+            else if (argument == "--mouse-test")
+            {
+                options.MouseTest = true;
+            }
+            else if (argument == "--sprite-test")
+            {
+                options.SpriteTest = true;
+            }
+            else if (argument == "--gpu-mesh-test")
+            {
+                options.GpuMeshTest = true;
+            }
+            else if (argument == "--project-test")
+            {
+                if (index + 1 >= argc)
+                {
+                    error = "--project-test requires a project path.";
+                    return false;
+                }
+
+                options.ProjectTest = true;
+                options.ProjectTestPath = argv[++index] ? argv[index] : "";
+            }
             else if (argument == "--runtime-test")
             {
                 options.RuntimeTest = true;
@@ -196,6 +231,13 @@ namespace Jevaing::Internal
             << "  --asset-error-test         Run headless asset error-path validation.\n"
             << "  --asset-info <path>        Print model asset information without a window.\n"
             << "  --mixed-2d-3d-test         Draw a 3D scene with a 2D overlay.\n"
+            << "  --scene-test               Render a simple Scene with hierarchy/components.\n"
+            << "  --scene-serialization-test Run headless Scene save/load validation.\n"
+            << "  --hierarchy-test           Run headless transform hierarchy validation.\n"
+            << "  --mouse-test               Show mouse state in a visual test.\n"
+            << "  --sprite-test              Draw a textured SpriteRenderer2D test.\n"
+            << "  --gpu-mesh-test            Validate persistent GPU mesh reuse.\n"
+            << "  --project-test <path>      Validate a jevaing.project file.\n"
             << "  --runtime-test             Run client callbacks for a fixed smoke test.\n"
             << "  --renderer <backend>       Select: directx, null, vulkan, metal.\n"
             << "  --frames <count>           Exit automatically after N frames.\n\n"

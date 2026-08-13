@@ -2,13 +2,15 @@ cmake_minimum_required(VERSION 3.20)
 
 project(
     Jevaing
-    VERSION 0.0.8
+    VERSION 0.0.9
     LANGUAGES C CXX
 )
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+option(JEVAING_BUILD_SANDBOX "Build the Jevaing Sandbox executable." ON)
 
 # External model import. Prefer an already-installed Assimp package and
 # otherwise fetch a pinned version for reproducible development builds.
@@ -64,6 +66,8 @@ add_library(JevaingEngine STATIC
     Engine/Core/CommandLine.cpp
     Engine/Core/Input.cpp
     Engine/Core/Logger.cpp
+    Engine/Core/Project.cpp
+    Engine/Core/Scene.cpp
     Engine/Core/Timer.cpp
     Engine/Core/Version.cpp
     Engine/Core/Window.cpp
@@ -115,27 +119,31 @@ target_link_libraries(JevaingEngine
         assimp::assimp
 )
 
-# Sandbox is now a real client of the public API.
-add_executable(JevaingSandbox
-    Sandbox/main.cpp
-)
+if(JEVAING_BUILD_SANDBOX)
+    # Sandbox is now a real client of the public API.
+    add_executable(JevaingSandbox
+        Sandbox/main.cpp
+    )
 
-target_link_libraries(JevaingSandbox
-    PRIVATE
-        JevaingEngine
-)
+    target_link_libraries(JevaingSandbox
+        PRIVATE
+            JevaingEngine
+    )
 
-set_target_properties(JevaingSandbox PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY_DEBUG
-        "${CMAKE_CURRENT_SOURCE_DIR}/bin/Debug"
+    set_target_properties(JevaingSandbox PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY_DEBUG
+            "${CMAKE_CURRENT_SOURCE_DIR}/bin/Debug"
 
-    RUNTIME_OUTPUT_DIRECTORY_RELEASE
-        "${CMAKE_CURRENT_SOURCE_DIR}/bin/Release"
-)
+        RUNTIME_OUTPUT_DIRECTORY_RELEASE
+            "${CMAKE_CURRENT_SOURCE_DIR}/bin/Release"
+    )
+endif()
 
 if(MSVC)
     target_compile_options(JevaingEngine PRIVATE /W4)
-    target_compile_options(JevaingSandbox PRIVATE /W4)
+    if(TARGET JevaingSandbox)
+        target_compile_options(JevaingSandbox PRIVATE /W4)
+    endif()
 else()
     target_compile_options(
         JevaingEngine PRIVATE
@@ -144,10 +152,12 @@ else()
         -Wpedantic
     )
 
-    target_compile_options(
-        JevaingSandbox PRIVATE
-        -Wall
-        -Wextra
-        -Wpedantic
-    )
+    if(TARGET JevaingSandbox)
+        target_compile_options(
+            JevaingSandbox PRIVATE
+            -Wall
+            -Wextra
+            -Wpedantic
+        )
+    endif()
 endif()

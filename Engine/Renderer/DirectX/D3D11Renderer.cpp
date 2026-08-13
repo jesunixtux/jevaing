@@ -31,6 +31,7 @@ namespace Jevaing::Internal
 cbuffer Jevaing3DConstants : register(b0)
 {
     row_major float4x4 model;
+    row_major float4x4 normalMatrix;
     row_major float4x4 modelViewProjection;
     float4 baseColor;
     float4 lightDirection;
@@ -71,7 +72,7 @@ VSOutput VSMain3D(VSInput input)
 {
     VSOutput output;
     output.position = mul(float4(input.position, 1.0f), modelViewProjection);
-    output.normal = normalize(mul(float4(input.normal, 0.0f), model).xyz);
+    output.normal = normalize(mul(float4(input.normal, 0.0f), normalMatrix).xyz);
     output.uv = input.uv;
     output.color = input.color;
     return output;
@@ -79,7 +80,14 @@ VSOutput VSMain3D(VSInput input)
 
 float4 PSMain2D(VSOutput input) : SV_TARGET
 {
-    return input.color;
+    float4 textureColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
+
+    if (textureState.x > 0.5f)
+    {
+        textureColor = baseColorTexture.Sample(baseColorSampler, input.uv);
+    }
+
+    return input.color * textureColor;
 }
 
 float4 PSMain3D(VSOutput input) : SV_TARGET
@@ -125,6 +133,29 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
             vertices.push_back(MakeVertex(x0, y0, color));
             vertices.push_back(MakeVertex(x1, y1, color));
             vertices.push_back(MakeVertex(x2, y2, color));
+        }
+
+        void Append2DQuadVertices(
+            std::vector<D3D11Vertex>& vertices,
+            const Vec2& center,
+            const Vec2& size,
+            const Color& color
+        )
+        {
+            const float halfWidth = size.X * 0.5f;
+            const float halfHeight = size.Y * 0.5f;
+
+            const float left = center.X - halfWidth;
+            const float right = center.X + halfWidth;
+            const float top = center.Y + halfHeight;
+            const float bottom = center.Y - halfHeight;
+
+            vertices.push_back({ { left, top, 0.0f }, { 0.0f, 0.0f, -1.0f }, { 0.0f, 0.0f }, { color.R, color.G, color.B, color.A } });
+            vertices.push_back({ { right, top, 0.0f }, { 0.0f, 0.0f, -1.0f }, { 1.0f, 0.0f }, { color.R, color.G, color.B, color.A } });
+            vertices.push_back({ { right, bottom, 0.0f }, { 0.0f, 0.0f, -1.0f }, { 1.0f, 1.0f }, { color.R, color.G, color.B, color.A } });
+            vertices.push_back({ { left, top, 0.0f }, { 0.0f, 0.0f, -1.0f }, { 0.0f, 0.0f }, { color.R, color.G, color.B, color.A } });
+            vertices.push_back({ { right, bottom, 0.0f }, { 0.0f, 0.0f, -1.0f }, { 1.0f, 1.0f }, { color.R, color.G, color.B, color.A } });
+            vertices.push_back({ { left, bottom, 0.0f }, { 0.0f, 0.0f, -1.0f }, { 0.0f, 1.0f }, { color.R, color.G, color.B, color.A } });
         }
 
         void AppendEllipse(
@@ -686,7 +717,7 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
     void D3D11Renderer::BeginFrame()
     {
         m_frame2DVertices.clear();
-        m_frame3DVertices.clear();
+        m_2DDrawBatches.clear();
         m_3DDrawBatches.clear();
 
         if (!m_context || !m_renderTargetView)
@@ -753,6 +784,11 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
         m_frame2DVertices.push_back(MakeVertex(a.X, a.Y, color));
         m_frame2DVertices.push_back(MakeVertex(b.X, b.Y, color));
         m_frame2DVertices.push_back(MakeVertex(c.X, c.Y, color));
+
+        D3D112DDrawBatch batch;
+        batch.StartVertex = m_frame2DVertices.size() - 3;
+        batch.VertexCount = 3;
+        m_2DDrawBatches.push_back(batch);
     }
 
     void D3D11Renderer::DrawQuad(
@@ -761,16 +797,27 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
         const Color& color
     )
     {
-        const float halfWidth = size.X * 0.5f;
-        const float halfHeight = size.Y * 0.5f;
+        D3D112DDrawBatch batch;
+        batch.StartVertex = m_frame2DVertices.size();
+        Append2DQuadVertices(m_frame2DVertices, center, size, color);
+        batch.VertexCount = m_frame2DVertices.size() - batch.StartVertex;
+        m_2DDrawBatches.push_back(batch);
+    }
 
-        const Vec2 topLeft = { center.X - halfWidth, center.Y + halfHeight };
-        const Vec2 topRight = { center.X + halfWidth, center.Y + halfHeight };
-        const Vec2 bottomRight = { center.X + halfWidth, center.Y - halfHeight };
-        const Vec2 bottomLeft = { center.X - halfWidth, center.Y - halfHeight };
-
-        DrawTriangle(topLeft, topRight, bottomRight, color);
-        DrawTriangle(topLeft, bottomRight, bottomLeft, color);
+    void D3D11Renderer::DrawSprite(
+        const std::shared_ptr<const Texture2D>& texture,
+        const Vec2& center,
+        const Vec2& size,
+        const Color& tint
+    )
+    {
+        D3D112DDrawBatch batch;
+        batch.StartVertex = m_frame2DVertices.size();
+        Append2DQuadVertices(m_frame2DVertices, center, size, tint);
+        batch.VertexCount = m_frame2DVertices.size() - batch.StartVertex;
+        batch.Texture = texture;
+        batch.Constants.TextureState[0] = texture && !texture->Empty() ? 1.0f : 0.0f;
+        m_2DDrawBatches.push_back(batch);
     }
 
     void D3D11Renderer::SetCamera(const PerspectiveCamera& camera)
@@ -787,7 +834,8 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
             return nullptr;
         }
 
-        auto existing = m_textureViews.find(texture.get());
+        const std::string cacheKey = GetTextureCacheKey(*texture);
+        auto existing = m_textureViews.find(cacheKey);
 
         if (existing != m_textureViews.end())
         {
@@ -840,8 +888,161 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
             return nullptr;
         }
 
-        m_textureViews[texture.get()] = shaderResourceView;
+        m_textureViews[cacheKey] = shaderResourceView;
         return shaderResourceView;
+    }
+
+    std::size_t D3D11Renderer::CalculateMeshSignature(const Mesh& mesh)
+    {
+        std::size_t signature = mesh.Vertices.size() * 1469598103934665603ull;
+        signature ^= mesh.Indices.size() + 0x9e3779b97f4a7c15ull + (signature << 6) + (signature >> 2);
+        signature ^= mesh.Name.size() + 0x9e3779b97f4a7c15ull + (signature << 6) + (signature >> 2);
+
+        if (!mesh.Vertices.empty())
+        {
+            signature ^= static_cast<std::size_t>(
+                std::fabs(mesh.Vertices.front().Position.X) * 100000.0f
+            );
+            signature ^= static_cast<std::size_t>(
+                std::fabs(mesh.Vertices.back().Position.Z) * 100000.0f
+            ) << 1;
+        }
+
+        return signature;
+    }
+
+    std::string D3D11Renderer::GetTextureCacheKey(const Texture2D& texture)
+    {
+        return
+            texture.SourcePath +
+            "|" +
+            std::to_string(texture.Width) +
+            "x" +
+            std::to_string(texture.Height) +
+            "|" +
+            std::to_string(static_cast<int>(texture.Format));
+    }
+
+    Mat4 D3D11Renderer::CalculateNormalMatrix(const Transform& transform)
+    {
+        Transform normalTransform = transform;
+
+        normalTransform.Scale = {
+            std::fabs(transform.Scale.X) > 0.000001f ? 1.0f / transform.Scale.X : 1.0f,
+            std::fabs(transform.Scale.Y) > 0.000001f ? 1.0f / transform.Scale.Y : 1.0f,
+            std::fabs(transform.Scale.Z) > 0.000001f ? 1.0f / transform.Scale.Z : 1.0f
+        };
+
+        return
+            Mat4::Scale(normalTransform.Scale) *
+            Mat4::RotationX(normalTransform.Rotation.X) *
+            Mat4::RotationY(normalTransform.Rotation.Y) *
+            Mat4::RotationZ(normalTransform.Rotation.Z);
+    }
+
+    bool D3D11Renderer::GetOrCreateMeshResource(
+        const Mesh& mesh,
+        D3D11MeshResource*& resource
+    )
+    {
+        resource = nullptr;
+
+        if (mesh.Empty() || !m_device)
+        {
+            return false;
+        }
+
+        const std::size_t signature = CalculateMeshSignature(mesh);
+        D3D11MeshResource& candidate = m_meshResources[&mesh];
+
+        if (
+            candidate.VertexBuffer &&
+            candidate.IndexBuffer &&
+            candidate.Signature == signature
+        )
+        {
+            resource = &candidate;
+            return true;
+        }
+
+        if (candidate.VertexBuffer)
+        {
+            candidate.VertexBuffer->Release();
+            candidate.VertexBuffer = nullptr;
+        }
+
+        if (candidate.IndexBuffer)
+        {
+            candidate.IndexBuffer->Release();
+            candidate.IndexBuffer = nullptr;
+        }
+
+        std::vector<D3D11Vertex> vertices;
+        vertices.reserve(mesh.Vertices.size());
+
+        for (const Vertex3D& vertex : mesh.Vertices)
+        {
+            vertices.push_back({
+                { vertex.Position.X, vertex.Position.Y, vertex.Position.Z },
+                { vertex.Normal.X, vertex.Normal.Y, vertex.Normal.Z },
+                { vertex.UV.X, vertex.UV.Y },
+                {
+                    vertex.VertexColor.R,
+                    vertex.VertexColor.G,
+                    vertex.VertexColor.B,
+                    vertex.VertexColor.A
+                }
+            });
+        }
+
+        D3D11_BUFFER_DESC vertexBufferDesc = {};
+        vertexBufferDesc.ByteWidth = static_cast<UINT>(vertices.size() * sizeof(D3D11Vertex));
+        vertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+        vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+
+        D3D11_SUBRESOURCE_DATA vertexData = {};
+        vertexData.pSysMem = vertices.data();
+
+        const HRESULT vertexResult = m_device->CreateBuffer(
+            &vertexBufferDesc,
+            &vertexData,
+            &candidate.VertexBuffer
+        );
+
+        if (FAILED(vertexResult) || !candidate.VertexBuffer)
+        {
+            Logger::Error("DirectX 11 failed to create a persistent mesh vertex buffer.");
+            return false;
+        }
+
+        D3D11_BUFFER_DESC indexBufferDesc = {};
+        indexBufferDesc.ByteWidth =
+            static_cast<UINT>(mesh.Indices.size() * sizeof(std::uint32_t));
+        indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
+        indexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+
+        D3D11_SUBRESOURCE_DATA indexData = {};
+        indexData.pSysMem = mesh.Indices.data();
+
+        const HRESULT indexResult = m_device->CreateBuffer(
+            &indexBufferDesc,
+            &indexData,
+            &candidate.IndexBuffer
+        );
+
+        if (FAILED(indexResult) || !candidate.IndexBuffer)
+        {
+            Logger::Error("DirectX 11 failed to create a persistent mesh index buffer.");
+            candidate.VertexBuffer->Release();
+            candidate.VertexBuffer = nullptr;
+            return false;
+        }
+
+        candidate.IndexCount = static_cast<std::uint32_t>(mesh.Indices.size());
+        candidate.Signature = signature;
+        ++m_debugMeshResourceCreateCount;
+        resource = &candidate;
+        return true;
     }
 
     void D3D11Renderer::DrawMesh(
@@ -856,43 +1057,10 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
         }
 
         D3D11DrawBatch batch;
-        batch.StartVertex = m_frame3DVertices.size();
-
-        for (std::uint32_t index : mesh.Indices)
-        {
-            if (index >= mesh.Vertices.size())
-            {
-                continue;
-            }
-
-            const Vertex3D& vertex = mesh.Vertices[index];
-
-            m_frame3DVertices.push_back({
-                {
-                    vertex.Position.X,
-                    vertex.Position.Y,
-                    vertex.Position.Z
-                },
-                {
-                    vertex.Normal.X,
-                    vertex.Normal.Y,
-                    vertex.Normal.Z
-                },
-                {
-                    vertex.UV.X,
-                    vertex.UV.Y
-                },
-                {
-                    vertex.VertexColor.R,
-                    vertex.VertexColor.G,
-                    vertex.VertexColor.B,
-                    vertex.VertexColor.A
-                }
-            });
-        }
-
-        batch.VertexCount = m_frame3DVertices.size() - batch.StartVertex;
+        batch.MeshData = &mesh;
+        batch.MeshSignature = CalculateMeshSignature(mesh);
         batch.Constants.Model = transform.ToMatrix();
+        batch.Constants.NormalMatrix = CalculateNormalMatrix(transform);
         batch.Constants.ModelViewProjection =
             batch.Constants.Model *
             m_camera.GetViewMatrix() *
@@ -915,10 +1083,7 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
                 : 0.0f;
         batch.Texture = material.BaseColorTexture;
 
-        if (batch.VertexCount > 0)
-        {
-            m_3DDrawBatches.push_back(batch);
-        }
+        m_3DDrawBatches.push_back(batch);
     }
 
     void D3D11Renderer::DrawCube(
@@ -1197,18 +1362,78 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
                 );
                 return;
             }
+
+            case RendererTestPattern::Scene:
+                return;
+
+            case RendererTestPattern::Sprite:
+            {
+                DrawSprite(
+                    m_testTexture,
+                    { 0.0f, 0.0f },
+                    { 0.65f, 0.65f },
+                    { 1.0f, 1.0f, 1.0f, 1.0f }
+                );
+                return;
+            }
+
+            case RendererTestPattern::GpuMesh:
+            {
+                PerspectiveCamera camera;
+                camera.Position = { 0.0f, 2.3f, -8.0f };
+                camera.Target = { 0.0f, 0.0f, 0.0f };
+                camera.AspectRatio =
+                    m_viewport.Height > 0.0f
+                        ? m_viewport.Width / m_viewport.Height
+                        : 1.0f;
+                SetCamera(camera);
+
+                static const Mesh cube = Geometry3D::CreateCubeMesh();
+                Material material;
+                material.BaseColor = { 0.34f, 0.76f, 1.0f, 1.0f };
+
+                for (int z = 0; z < 4; ++z)
+                {
+                    for (int x = 0; x < 6; ++x)
+                    {
+                        Transform transform;
+                        transform.Position = {
+                            -3.0f + static_cast<float>(x) * 1.2f,
+                            0.0f,
+                            static_cast<float>(z) * 1.0f
+                        };
+                        transform.Rotation = {
+                            0.0f,
+                            static_cast<float>(m_frameIndex) * 0.01f,
+                            0.0f
+                        };
+                        DrawMesh(cube, transform, material);
+                    }
+                }
+
+                return;
+            }
         }
 
+        const std::size_t startVertex = m_frame2DVertices.size();
         m_frame2DVertices.insert(
             m_frame2DVertices.end(),
             vertices.begin(),
             vertices.end()
         );
+
+        if (!vertices.empty())
+        {
+            D3D112DDrawBatch batch;
+            batch.StartVertex = startVertex;
+            batch.VertexCount = vertices.size();
+            m_2DDrawBatches.push_back(batch);
+        }
     }
 
     void D3D11Renderer::Flush2DDrawCommands()
     {
-        if (m_frame2DVertices.empty() || !m_context)
+        if (m_frame2DVertices.empty() || m_2DDrawBatches.empty() || !m_context)
         {
             return;
         }
@@ -1249,42 +1474,37 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
         m_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         m_context->VSSetShader(m_vertexShader2D, nullptr, 0);
         m_context->PSSetShader(m_pixelShader2D, nullptr, 0);
-        m_context->Draw(static_cast<UINT>(m_frame2DVertices.size()), 0);
+        m_context->PSSetConstantBuffers(0, 1, &m_constantBuffer);
+        m_context->PSSetSamplers(0, 1, &m_samplerState);
+
+        for (const D3D112DDrawBatch& batch : m_2DDrawBatches)
+        {
+            ID3D11ShaderResourceView* textureView = GetOrCreateTextureView(batch.Texture);
+            m_context->PSSetShaderResources(0, 1, &textureView);
+            m_context->UpdateSubresource(
+                m_constantBuffer,
+                0,
+                nullptr,
+                &batch.Constants,
+                0,
+                0
+            );
+            m_context->Draw(
+                static_cast<UINT>(batch.VertexCount),
+                static_cast<UINT>(batch.StartVertex)
+            );
+        }
+
+        ID3D11ShaderResourceView* nullTexture = nullptr;
+        m_context->PSSetShaderResources(0, 1, &nullTexture);
     }
 
     void D3D11Renderer::Flush3DDrawCommands()
     {
-        if (m_frame3DVertices.empty() || m_3DDrawBatches.empty() || !m_context)
+        if (m_3DDrawBatches.empty() || !m_context)
         {
             return;
         }
-
-        if (!EnsureVertexCapacity(m_frame3DVertices.size()))
-        {
-            return;
-        }
-
-        D3D11_MAPPED_SUBRESOURCE mapped = {};
-        const HRESULT mapResult = m_context->Map(
-            m_vertexBuffer,
-            0,
-            D3D11_MAP_WRITE_DISCARD,
-            0,
-            &mapped
-        );
-
-        if (FAILED(mapResult) || !mapped.pData)
-        {
-            Logger::Error("DirectX 11 failed to map the dynamic 3D vertex buffer.");
-            return;
-        }
-
-        std::memcpy(
-            mapped.pData,
-            m_frame3DVertices.data(),
-            m_frame3DVertices.size() * sizeof(D3D11Vertex)
-        );
-        m_context->Unmap(m_vertexBuffer, 0);
 
         constexpr UINT stride = sizeof(D3D11Vertex);
         constexpr UINT offset = 0;
@@ -1301,8 +1521,32 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
 
         for (const D3D11DrawBatch& batch : m_3DDrawBatches)
         {
+            if (!batch.MeshData)
+            {
+                continue;
+            }
+
+            D3D11MeshResource* meshResource = nullptr;
+
+            if (!GetOrCreateMeshResource(*batch.MeshData, meshResource) || !meshResource)
+            {
+                continue;
+            }
+
             ID3D11ShaderResourceView* textureView = GetOrCreateTextureView(batch.Texture);
             m_context->PSSetShaderResources(0, 1, &textureView);
+            m_context->IASetVertexBuffers(
+                0,
+                1,
+                &meshResource->VertexBuffer,
+                &stride,
+                &offset
+            );
+            m_context->IASetIndexBuffer(
+                meshResource->IndexBuffer,
+                DXGI_FORMAT_R32_UINT,
+                0
+            );
 
             m_context->UpdateSubresource(
                 m_constantBuffer,
@@ -1313,9 +1557,10 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
                 0
             );
 
-            m_context->Draw(
-                static_cast<UINT>(batch.VertexCount),
-                static_cast<UINT>(batch.StartVertex)
+            m_context->DrawIndexed(
+                meshResource->IndexCount,
+                0,
+                0
             );
         }
 
@@ -1331,6 +1576,11 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
     RendererBackend D3D11Renderer::GetBackend() const
     {
         return RendererBackend::DirectX;
+    }
+
+    std::size_t D3D11Renderer::GetDebugMeshResourceCreateCount() const
+    {
+        return m_debugMeshResourceCreateCount;
     }
 
     void D3D11Renderer::ReleaseResources()
@@ -1354,6 +1604,20 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
             }
         }
         m_textureViews.clear();
+
+        for (auto& meshResource : m_meshResources)
+        {
+            if (meshResource.second.VertexBuffer)
+            {
+                meshResource.second.VertexBuffer->Release();
+            }
+
+            if (meshResource.second.IndexBuffer)
+            {
+                meshResource.second.IndexBuffer->Release();
+            }
+        }
+        m_meshResources.clear();
 
         if (m_constantBuffer)
         {
@@ -1441,7 +1705,7 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
 
         m_vertexCapacity = 0;
         m_frame2DVertices.clear();
-        m_frame3DVertices.clear();
+        m_2DDrawBatches.clear();
         m_3DDrawBatches.clear();
     }
 }
