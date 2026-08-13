@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 
 project(
     Jevaing
-    VERSION 0.0.7
+    VERSION 0.0.8
     LANGUAGES C CXX
 )
 
@@ -44,11 +44,22 @@ if(NOT TARGET assimp::assimp)
     FetchContent_MakeAvailable(assimp)
 endif()
 
+include(FetchContent)
+
+FetchContent_Declare(
+    stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG 2c980bb59875b0d32144a71867fbdebb2f77cd20
+)
+
+FetchContent_MakeAvailable(stb)
+
 # Public API
 add_subdirectory(Api)
 
 # Jevaing core
 add_library(JevaingEngine STATIC
+    Engine/Core/AssetManager.cpp
     Engine/Core/Application.cpp
     Engine/Core/CommandLine.cpp
     Engine/Core/Input.cpp
@@ -58,6 +69,7 @@ add_library(JevaingEngine STATIC
     Engine/Core/Window.cpp
     Engine/Renderer/Renderer.cpp
     geometry/3D/ModelLoader.cpp
+    geometry/3D/TextureLoader.cpp
     geometry/3D/Primitives/Cube.cpp
 )
 
@@ -93,6 +105,7 @@ target_include_directories(JevaingEngine
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/Engine/Core
+        ${stb_SOURCE_DIR}
 )
 
 target_link_libraries(JevaingEngine

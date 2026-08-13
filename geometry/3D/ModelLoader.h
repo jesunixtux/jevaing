@@ -17,6 +17,13 @@ namespace Jevaing::Internal::Geometry3D
     public:
         static bool Load(
             const std::string& path,
+            Model& model,
+            const ModelLoadOptions& options,
+            std::string& error
+        );
+
+        static bool Load(
+            const std::string& path,
             Mesh& mesh,
             const ModelLoadOptions& options,
             std::string& error

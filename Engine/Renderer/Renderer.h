@@ -6,8 +6,6 @@
 #include <Jevaing/Graphics2D.h>
 #include <Jevaing/Graphics3D.h>
 
-#include <geometry/3D/Mesh.h>
-
 namespace Jevaing::Internal
 {
     class Window;
@@ -26,15 +24,21 @@ namespace Jevaing::Internal
         Triangle,
         Penguin,
         Cube,
-        ExternalModel
+        ExternalModel,
+        Texture,
+        Material,
+        Lighting,
+        MultiModel,
+        Mixed2D3D
     };
 
     struct RendererConfig
     {
         RendererBackend Backend = RendererBackend::None;
         RendererTestPattern TestPattern = RendererTestPattern::None;
-        std::shared_ptr<const Geometry3D::Mesh> TestMesh;
-        Color TestMeshTint = { 1.0f, 1.0f, 1.0f, 1.0f };
+        std::shared_ptr<const Model> TestModel;
+        std::shared_ptr<const Model> SecondaryTestModel;
+        std::shared_ptr<const Texture2D> TestTexture;
     };
 
     class Renderer : public Jevaing::Graphics2D, public Jevaing::Graphics3D

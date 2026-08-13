@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Assets.h"
 #include "Types.h"
 
 namespace Jevaing
@@ -15,5 +16,13 @@ namespace Jevaing
             const Transform& transform,
             const Color& color
         ) = 0;
+
+        virtual void DrawMesh(
+            const Mesh& mesh,
+            const Transform& transform,
+            const Material& material
+        ) = 0;
+
+        virtual void SetDirectionalLight(const DirectionalLight& light) = 0;
     };
 }

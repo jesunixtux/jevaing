@@ -54,6 +54,56 @@ namespace Jevaing::Internal
             {
                 options.Gummy3DTest = true;
             }
+            else if (argument == "--model-test")
+            {
+                if (index + 1 >= argc)
+                {
+                    error = "--model-test requires a model path.";
+                    return false;
+                }
+
+                options.ModelTest = true;
+                options.ModelTestPath = argv[++index] ? argv[index] : "";
+            }
+            else if (argument == "--texture-test")
+            {
+                options.TextureTest = true;
+            }
+            else if (argument == "--material-test")
+            {
+                options.MaterialTest = true;
+            }
+            else if (argument == "--lighting-test")
+            {
+                options.LightingTest = true;
+            }
+            else if (argument == "--multi-model-test")
+            {
+                options.MultiModelTest = true;
+            }
+            else if (argument == "--asset-cache-test")
+            {
+                options.AssetCacheTest = true;
+            }
+            else if (argument == "--asset-error-test")
+            {
+                options.AssetErrorTest = true;
+            }
+            else if (argument == "--asset-info")
+            {
+                if (index + 1 >= argc)
+                {
+                    error = "--asset-info requires an asset path.";
+                    return false;
+                }
+
+                options.AssetInfo = true;
+                options.AssetInfoPath = argv[++index] ? argv[index] : "";
+            }
+            else if (argument == "--mixed-2d-3d-test")
+            {
+                options.Mixed2D3DTest = true;
+            }
             else if (argument == "--runtime-test")
             {
                 options.RuntimeTest = true;
@@ -137,6 +187,15 @@ namespace Jevaing::Internal
             << "  --graphics-test-3d         Run the rotating cube GPU smoke test.\n"
             << "  --penguin-test-3d          Load tux.glb and rotate it in 3D.\n"
             << "  --gummy3d-test             Load gummybear.fbx and rotate it in 3D.\n"
+            << "  --model-test <path>        Load any supported model and rotate it in 3D.\n"
+            << "  --texture-test             Draw a textured plane using Texture2D.\n"
+            << "  --material-test            Draw objects with independent materials.\n"
+            << "  --lighting-test            Draw lit 3D geometry with a directional light.\n"
+            << "  --multi-model-test         Draw tux, gummybear and a Jevaing cube together.\n"
+            << "  --asset-cache-test         Run headless AssetManager cache validation.\n"
+            << "  --asset-error-test         Run headless asset error-path validation.\n"
+            << "  --asset-info <path>        Print model asset information without a window.\n"
+            << "  --mixed-2d-3d-test         Draw a 3D scene with a 2D overlay.\n"
             << "  --runtime-test             Run client callbacks for a fixed smoke test.\n"
             << "  --renderer <backend>       Select: directx, null, vulkan, metal.\n"
             << "  --frames <count>           Exit automatically after N frames.\n\n"
@@ -149,6 +208,12 @@ namespace Jevaing::Internal
             << "  JevaingSandbox.exe --graphics-test-3d\n"
             << "  JevaingSandbox.exe --penguin-test-3d\n"
             << "  JevaingSandbox.exe --gummy3d-test\n"
+            << "  JevaingSandbox.exe --model-test geometry/3D/.hide/easter/tux.glb\n"
+            << "  JevaingSandbox.exe --texture-test\n"
+            << "  JevaingSandbox.exe --material-test\n"
+            << "  JevaingSandbox.exe --lighting-test\n"
+            << "  JevaingSandbox.exe --multi-model-test\n"
+            << "  JevaingSandbox.exe --asset-info geometry/3D/.hide/easter/tux.glb\n"
             << "  JevaingSandbox.exe --runtime-test\n"
             << "  JevaingSandbox.exe --renderer directx --frames 300\n"
             << "  JevaingSandbox.exe --renderer null --frames 60\n";

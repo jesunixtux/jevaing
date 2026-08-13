@@ -30,18 +30,30 @@ namespace Jevaing::Internal
         constexpr char ShaderSource[] = R"(
 cbuffer Jevaing3DConstants : register(b0)
 {
+    row_major float4x4 model;
     row_major float4x4 modelViewProjection;
+    float4 baseColor;
+    float4 lightDirection;
+    float4 lightColor;
+    float4 textureState;
 };
+
+Texture2D baseColorTexture : register(t0);
+SamplerState baseColorSampler : register(s0);
 
 struct VSInput
 {
     float3 position : POSITION;
+    float3 normal : NORMAL;
+    float2 uv : TEXCOORD0;
     float4 color : COLOR;
 };
 
 struct VSOutput
 {
     float4 position : SV_POSITION;
+    float3 normal : NORMAL;
+    float2 uv : TEXCOORD0;
     float4 color : COLOR;
 };
 
@@ -49,6 +61,8 @@ VSOutput VSMain2D(VSInput input)
 {
     VSOutput output;
     output.position = float4(input.position, 1.0f);
+    output.normal = input.normal;
+    output.uv = input.uv;
     output.color = input.color;
     return output;
 }
@@ -57,13 +71,33 @@ VSOutput VSMain3D(VSInput input)
 {
     VSOutput output;
     output.position = mul(float4(input.position, 1.0f), modelViewProjection);
+    output.normal = normalize(mul(float4(input.normal, 0.0f), model).xyz);
+    output.uv = input.uv;
     output.color = input.color;
     return output;
 }
 
-float4 PSMain(VSOutput input) : SV_TARGET
+float4 PSMain2D(VSOutput input) : SV_TARGET
 {
     return input.color;
+}
+
+float4 PSMain3D(VSOutput input) : SV_TARGET
+{
+    float4 textureColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
+
+    if (textureState.x > 0.5f)
+    {
+        textureColor = baseColorTexture.Sample(baseColorSampler, input.uv);
+    }
+
+    float3 normal = normalize(input.normal);
+    float3 lightToSurface = normalize(-lightDirection.xyz);
+    float diffuse = saturate(dot(normal, lightToSurface)) * lightDirection.w;
+    float3 lighting = 0.18f + diffuse * lightColor.rgb;
+
+    float4 materialColor = input.color * baseColor * textureColor;
+    return float4(materialColor.rgb * lighting, materialColor.a);
 }
 )";
 
@@ -71,17 +105,9 @@ float4 PSMain(VSOutput input) : SV_TARGET
         {
             return {
                 { x, y, 0.0f },
+                { 0.0f, 0.0f, -1.0f },
+                { 0.0f, 0.0f },
                 { color.R, color.G, color.B, color.A }
-            };
-        }
-
-        Color MultiplyColor(const Color& left, const Color& right)
-        {
-            return {
-                left.R * right.R,
-                left.G * right.G,
-                left.B * right.B,
-                left.A * right.A
             };
         }
 
@@ -229,8 +255,9 @@ float4 PSMain(VSOutput input) : SV_TARGET
 
     D3D11Renderer::D3D11Renderer(const RendererConfig& config)
         : m_testPattern(config.TestPattern),
-          m_testMesh(config.TestMesh),
-          m_testMeshTint(config.TestMeshTint)
+          m_testModel(config.TestModel),
+          m_secondaryTestModel(config.SecondaryTestModel),
+          m_testTexture(config.TestTexture)
     {
     }
 
@@ -302,7 +329,8 @@ float4 PSMain(VSOutput input) : SV_TARGET
     {
         ID3DBlob* vertexShader2DBlob = nullptr;
         ID3DBlob* vertexShader3DBlob = nullptr;
-        ID3DBlob* pixelShaderBlob = nullptr;
+        ID3DBlob* pixelShader2DBlob = nullptr;
+        ID3DBlob* pixelShader3DBlob = nullptr;
 
         if (!CompileShader("VSMain2D", "vs_5_0", &vertexShader2DBlob))
         {
@@ -315,8 +343,16 @@ float4 PSMain(VSOutput input) : SV_TARGET
             return false;
         }
 
-        if (!CompileShader("PSMain", "ps_5_0", &pixelShaderBlob))
+        if (!CompileShader("PSMain2D", "ps_5_0", &pixelShader2DBlob))
         {
+            vertexShader3DBlob->Release();
+            vertexShader2DBlob->Release();
+            return false;
+        }
+
+        if (!CompileShader("PSMain3D", "ps_5_0", &pixelShader3DBlob))
+        {
+            pixelShader2DBlob->Release();
             vertexShader3DBlob->Release();
             vertexShader2DBlob->Release();
             return false;
@@ -336,17 +372,34 @@ float4 PSMain(VSOutput input) : SV_TARGET
             &m_vertexShader3D
         );
 
-        const HRESULT pixelShaderResult = m_device->CreatePixelShader(
-            pixelShaderBlob->GetBufferPointer(),
-            pixelShaderBlob->GetBufferSize(),
+        const HRESULT pixelShader2DResult = m_device->CreatePixelShader(
+            pixelShader2DBlob->GetBufferPointer(),
+            pixelShader2DBlob->GetBufferSize(),
             nullptr,
-            &m_pixelShader
+            &m_pixelShader2D
+        );
+
+        const HRESULT pixelShader3DResult = m_device->CreatePixelShader(
+            pixelShader3DBlob->GetBufferPointer(),
+            pixelShader3DBlob->GetBufferSize(),
+            nullptr,
+            &m_pixelShader3D
         );
 
         const D3D11_INPUT_ELEMENT_DESC inputElements[] = {
             {
                 "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
                 static_cast<UINT>(offsetof(D3D11Vertex, Position)),
+                D3D11_INPUT_PER_VERTEX_DATA, 0
+            },
+            {
+                "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,
+                static_cast<UINT>(offsetof(D3D11Vertex, Normal)),
+                D3D11_INPUT_PER_VERTEX_DATA, 0
+            },
+            {
+                "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0,
+                static_cast<UINT>(offsetof(D3D11Vertex, UV)),
                 D3D11_INPUT_PER_VERTEX_DATA, 0
             },
             {
@@ -364,18 +417,21 @@ float4 PSMain(VSOutput input) : SV_TARGET
             &m_inputLayout
         );
 
-        pixelShaderBlob->Release();
+        pixelShader3DBlob->Release();
+        pixelShader2DBlob->Release();
         vertexShader3DBlob->Release();
         vertexShader2DBlob->Release();
 
         if (
             FAILED(vertexShader2DResult) ||
             FAILED(vertexShader3DResult) ||
-            FAILED(pixelShaderResult) ||
+            FAILED(pixelShader2DResult) ||
+            FAILED(pixelShader3DResult) ||
             FAILED(inputLayoutResult) ||
             !m_vertexShader2D ||
             !m_vertexShader3D ||
-            !m_pixelShader ||
+            !m_pixelShader2D ||
+            !m_pixelShader3D ||
             !m_inputLayout
         )
         {
@@ -384,7 +440,7 @@ float4 PSMain(VSOutput input) : SV_TARGET
         }
 
         D3D11_BUFFER_DESC constantBufferDesc = {};
-        constantBufferDesc.ByteWidth = sizeof(Mat4);
+        constantBufferDesc.ByteWidth = sizeof(D3D11ObjectConstants);
         constantBufferDesc.Usage = D3D11_USAGE_DEFAULT;
         constantBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
 
@@ -413,6 +469,26 @@ float4 PSMain(VSOutput input) : SV_TARGET
         if (FAILED(rasterizerResult) || !m_rasterizerState)
         {
             Logger::Error("DirectX 11 failed to create the rasterizer state.");
+            return false;
+        }
+
+        D3D11_SAMPLER_DESC samplerDesc = {};
+        samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+        samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+        samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+        samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+        samplerDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+        samplerDesc.MinLOD = 0.0f;
+        samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+
+        const HRESULT samplerResult = m_device->CreateSamplerState(
+            &samplerDesc,
+            &m_samplerState
+        );
+
+        if (FAILED(samplerResult) || !m_samplerState)
+        {
+            Logger::Error("DirectX 11 failed to create the texture sampler state.");
             return false;
         }
 
@@ -702,10 +778,76 @@ float4 PSMain(VSOutput input) : SV_TARGET
         m_camera = camera;
     }
 
+    ID3D11ShaderResourceView* D3D11Renderer::GetOrCreateTextureView(
+        const std::shared_ptr<const Texture2D>& texture
+    )
+    {
+        if (!texture || texture->Empty() || texture->Format != PixelFormat::Rgba8)
+        {
+            return nullptr;
+        }
+
+        auto existing = m_textureViews.find(texture.get());
+
+        if (existing != m_textureViews.end())
+        {
+            return existing->second;
+        }
+
+        D3D11_TEXTURE2D_DESC textureDesc = {};
+        textureDesc.Width = static_cast<UINT>(texture->Width);
+        textureDesc.Height = static_cast<UINT>(texture->Height);
+        textureDesc.MipLevels = 1;
+        textureDesc.ArraySize = 1;
+        textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        textureDesc.SampleDesc.Count = 1;
+        textureDesc.Usage = D3D11_USAGE_DEFAULT;
+        textureDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+
+        D3D11_SUBRESOURCE_DATA textureData = {};
+        textureData.pSysMem = texture->Pixels.data();
+        textureData.SysMemPitch = static_cast<UINT>(texture->Width * 4);
+
+        ID3D11Texture2D* gpuTexture = nullptr;
+        const HRESULT textureResult = m_device->CreateTexture2D(
+            &textureDesc,
+            &textureData,
+            &gpuTexture
+        );
+
+        if (FAILED(textureResult) || !gpuTexture)
+        {
+            Logger::Error("DirectX 11 failed to create a Texture2D GPU resource.");
+            return nullptr;
+        }
+
+        D3D11_SHADER_RESOURCE_VIEW_DESC viewDesc = {};
+        viewDesc.Format = textureDesc.Format;
+        viewDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+        viewDesc.Texture2D.MipLevels = 1;
+
+        ID3D11ShaderResourceView* shaderResourceView = nullptr;
+        const HRESULT viewResult = m_device->CreateShaderResourceView(
+            gpuTexture,
+            &viewDesc,
+            &shaderResourceView
+        );
+        gpuTexture->Release();
+
+        if (FAILED(viewResult) || !shaderResourceView)
+        {
+            Logger::Error("DirectX 11 failed to create a Texture2D shader view.");
+            return nullptr;
+        }
+
+        m_textureViews[texture.get()] = shaderResourceView;
+        return shaderResourceView;
+    }
+
     void D3D11Renderer::DrawMesh(
-        const Geometry3D::Mesh& mesh,
+        const Mesh& mesh,
         const Transform& transform,
-        const Color& tint
+        const Material& material
     )
     {
         if (mesh.Empty())
@@ -716,9 +858,14 @@ float4 PSMain(VSOutput input) : SV_TARGET
         D3D11DrawBatch batch;
         batch.StartVertex = m_frame3DVertices.size();
 
-        for (const Geometry3D::MeshVertex& vertex : mesh.Vertices)
+        for (std::uint32_t index : mesh.Indices)
         {
-            const Color color = MultiplyColor(vertex.VertexColor, tint);
+            if (index >= mesh.Vertices.size())
+            {
+                continue;
+            }
+
+            const Vertex3D& vertex = mesh.Vertices[index];
 
             m_frame3DVertices.push_back({
                 {
@@ -727,21 +874,51 @@ float4 PSMain(VSOutput input) : SV_TARGET
                     vertex.Position.Z
                 },
                 {
-                    color.R,
-                    color.G,
-                    color.B,
-                    color.A
+                    vertex.Normal.X,
+                    vertex.Normal.Y,
+                    vertex.Normal.Z
+                },
+                {
+                    vertex.UV.X,
+                    vertex.UV.Y
+                },
+                {
+                    vertex.VertexColor.R,
+                    vertex.VertexColor.G,
+                    vertex.VertexColor.B,
+                    vertex.VertexColor.A
                 }
             });
         }
 
         batch.VertexCount = m_frame3DVertices.size() - batch.StartVertex;
-        batch.ModelViewProjection =
-            transform.ToMatrix() *
+        batch.Constants.Model = transform.ToMatrix();
+        batch.Constants.ModelViewProjection =
+            batch.Constants.Model *
             m_camera.GetViewMatrix() *
             m_camera.GetProjectionMatrix();
+        batch.Constants.BaseColor[0] = material.BaseColor.R;
+        batch.Constants.BaseColor[1] = material.BaseColor.G;
+        batch.Constants.BaseColor[2] = material.BaseColor.B;
+        batch.Constants.BaseColor[3] = material.BaseColor.A;
+        batch.Constants.LightDirection[0] = m_directionalLight.Direction.X;
+        batch.Constants.LightDirection[1] = m_directionalLight.Direction.Y;
+        batch.Constants.LightDirection[2] = m_directionalLight.Direction.Z;
+        batch.Constants.LightDirection[3] = m_directionalLight.Intensity;
+        batch.Constants.LightColor[0] = m_directionalLight.Color.R;
+        batch.Constants.LightColor[1] = m_directionalLight.Color.G;
+        batch.Constants.LightColor[2] = m_directionalLight.Color.B;
+        batch.Constants.LightColor[3] = m_directionalLight.Color.A;
+        batch.Constants.TextureState[0] =
+            material.BaseColorTexture && !material.BaseColorTexture->Empty()
+                ? 1.0f
+                : 0.0f;
+        batch.Texture = material.BaseColorTexture;
 
-        m_3DDrawBatches.push_back(batch);
+        if (batch.VertexCount > 0)
+        {
+            m_3DDrawBatches.push_back(batch);
+        }
     }
 
     void D3D11Renderer::DrawCube(
@@ -749,8 +926,38 @@ float4 PSMain(VSOutput input) : SV_TARGET
         const Color& color
     )
     {
-        static const Geometry3D::Mesh cube = Geometry3D::CreateCubeMesh();
-        DrawMesh(cube, transform, color);
+        static const Mesh cube = Geometry3D::CreateCubeMesh();
+
+        Material material;
+        material.BaseColor = color;
+        DrawMesh(cube, transform, material);
+    }
+
+    void D3D11Renderer::SetDirectionalLight(const DirectionalLight& light)
+    {
+        m_directionalLight = light;
+    }
+
+    void D3D11Renderer::DrawModel(
+        const Model& model,
+        const Transform& transform,
+        const Material* overrideMaterial
+    )
+    {
+        for (const Mesh& mesh : model.Meshes)
+        {
+            const Material fallback;
+            const Material& material =
+                overrideMaterial
+                    ? *overrideMaterial
+                    : (
+                        mesh.MaterialIndex < model.Materials.size()
+                            ? model.Materials[mesh.MaterialIndex]
+                            : fallback
+                    );
+
+            DrawMesh(mesh, transform, material);
+        }
     }
 
     void D3D11Renderer::AppendTestPattern()
@@ -793,7 +1000,7 @@ float4 PSMain(VSOutput input) : SV_TARGET
 
             case RendererTestPattern::ExternalModel:
             {
-                if (!m_testMesh || m_testMesh->Empty())
+                if (!m_testModel || m_testModel->Empty())
                 {
                     return;
                 }
@@ -814,7 +1021,180 @@ float4 PSMain(VSOutput input) : SV_TARGET
                     0.0f
                 };
 
-                DrawMesh(*m_testMesh, transform, m_testMeshTint);
+                DrawModel(*m_testModel, transform);
+                return;
+            }
+
+            case RendererTestPattern::Texture:
+            {
+                PerspectiveCamera camera;
+                camera.Position = { 0.0f, 1.10f, -3.6f };
+                camera.Target = { 0.0f, 0.0f, 0.0f };
+                camera.AspectRatio =
+                    m_viewport.Height > 0.0f
+                        ? m_viewport.Width / m_viewport.Height
+                        : 1.0f;
+                SetCamera(camera);
+
+                static const Mesh plane = Geometry3D::CreatePlaneMesh();
+                Material material;
+                material.BaseColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+                material.BaseColorTexture = m_testTexture;
+
+                Transform transform;
+                transform.Position = { 0.0f, 0.0f, 0.0f };
+                transform.Rotation = { -0.55f, 0.0f, 0.0f };
+                transform.Scale = { 2.6f, 2.6f, 2.6f };
+
+                DrawMesh(plane, transform, material);
+                return;
+            }
+
+            case RendererTestPattern::Material:
+            {
+                PerspectiveCamera camera;
+                camera.Position = { 0.0f, 1.00f, -5.2f };
+                camera.Target = { 0.0f, 0.0f, 0.0f };
+                camera.AspectRatio =
+                    m_viewport.Height > 0.0f
+                        ? m_viewport.Width / m_viewport.Height
+                        : 1.0f;
+                SetCamera(camera);
+
+                static const Mesh cube = Geometry3D::CreateCubeMesh();
+                const Color colors[] = {
+                    { 1.0f, 0.18f, 0.16f, 1.0f },
+                    { 0.18f, 0.86f, 0.36f, 1.0f },
+                    { 0.18f, 0.42f, 1.0f, 1.0f },
+                    { 1.0f, 1.0f, 1.0f, 1.0f }
+                };
+
+                for (int item = 0; item < 4; ++item)
+                {
+                    Material material;
+                    material.BaseColor = colors[item];
+
+                    if (item == 3)
+                    {
+                        material.BaseColorTexture = m_testTexture;
+                    }
+
+                    Transform transform;
+                    transform.Position = { -2.1f + static_cast<float>(item) * 1.4f, 0.0f, 0.0f };
+                    transform.Rotation = {
+                        static_cast<float>(m_frameIndex) * 0.010f,
+                        static_cast<float>(m_frameIndex) * 0.015f,
+                        0.0f
+                    };
+                    DrawMesh(cube, transform, material);
+                }
+
+                return;
+            }
+
+            case RendererTestPattern::Lighting:
+            {
+                PerspectiveCamera camera;
+                camera.Position = { 0.0f, 1.15f, -4.2f };
+                camera.Target = { 0.0f, 0.0f, 0.0f };
+                camera.AspectRatio =
+                    m_viewport.Height > 0.0f
+                        ? m_viewport.Width / m_viewport.Height
+                        : 1.0f;
+                SetCamera(camera);
+
+                const float angle = static_cast<float>(m_frameIndex) * 0.018f;
+                DirectionalLight light;
+                light.Direction = { std::cos(angle) * -0.75f, -0.85f, std::sin(angle) * 0.75f };
+                light.Color = { 1.0f, 0.95f, 0.84f, 1.0f };
+                light.Intensity = 1.15f;
+                SetDirectionalLight(light);
+
+                static const Mesh cube = Geometry3D::CreateCubeMesh();
+                Material material;
+                material.BaseColor = { 0.38f, 0.76f, 1.0f, 1.0f };
+
+                Transform transform;
+                transform.Rotation = {
+                    static_cast<float>(m_frameIndex) * 0.006f,
+                    static_cast<float>(m_frameIndex) * 0.013f,
+                    0.0f
+                };
+                transform.Scale = { 1.55f, 1.55f, 1.55f };
+                DrawMesh(cube, transform, material);
+                return;
+            }
+
+            case RendererTestPattern::MultiModel:
+            {
+                PerspectiveCamera camera;
+                camera.Position = { 0.0f, 1.20f, -6.4f };
+                camera.Target = { 0.0f, 0.0f, 0.0f };
+                camera.AspectRatio =
+                    m_viewport.Height > 0.0f
+                        ? m_viewport.Width / m_viewport.Height
+                        : 1.0f;
+                SetCamera(camera);
+
+                const float rotation = static_cast<float>(m_frameIndex) * 0.010f;
+
+                if (m_testModel)
+                {
+                    Transform transform;
+                    transform.Position = { -2.3f, 0.0f, 0.0f };
+                    transform.Rotation = { 0.0f, rotation, 0.0f };
+                    DrawModel(*m_testModel, transform);
+                }
+
+                if (m_secondaryTestModel)
+                {
+                    Transform transform;
+                    transform.Position = { 0.0f, 0.0f, 0.0f };
+                    transform.Rotation = { 0.0f, -rotation * 0.85f, 0.0f };
+                    DrawModel(*m_secondaryTestModel, transform);
+                }
+
+                static const Mesh cube = Geometry3D::CreateCubeMesh();
+                Material cubeMaterial;
+                cubeMaterial.BaseColor = { 0.25f, 0.72f, 1.0f, 1.0f };
+
+                Transform cubeTransform;
+                cubeTransform.Position = { 2.3f, 0.0f, 0.0f };
+                cubeTransform.Rotation = { rotation * 0.6f, rotation, 0.0f };
+                cubeTransform.Scale = { 1.25f, 1.25f, 1.25f };
+                DrawMesh(cube, cubeTransform, cubeMaterial);
+                return;
+            }
+
+            case RendererTestPattern::Mixed2D3D:
+            {
+                PerspectiveCamera camera;
+                camera.Position = { 0.0f, 1.10f, -4.0f };
+                camera.Target = { 0.0f, 0.0f, 0.0f };
+                camera.AspectRatio =
+                    m_viewport.Height > 0.0f
+                        ? m_viewport.Width / m_viewport.Height
+                        : 1.0f;
+                SetCamera(camera);
+
+                Transform transform;
+                transform.Rotation = {
+                    static_cast<float>(m_frameIndex) * 0.010f,
+                    static_cast<float>(m_frameIndex) * 0.017f,
+                    0.0f
+                };
+                DrawCube(transform, { 0.25f, 0.72f, 1.0f, 1.0f });
+
+                DrawQuad(
+                    { 0.0f, -0.88f },
+                    { 1.65f, 0.16f },
+                    { 0.08f, 0.12f, 0.18f, 1.0f }
+                );
+                DrawQuad(
+                    { -0.72f, -0.88f },
+                    { 0.18f, 0.06f },
+                    { 0.95f, 0.36f, 0.22f, 1.0f }
+                );
                 return;
             }
         }
@@ -868,7 +1248,7 @@ float4 PSMain(VSOutput input) : SV_TARGET
         m_context->IASetVertexBuffers(0, 1, &m_vertexBuffer, &stride, &offset);
         m_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         m_context->VSSetShader(m_vertexShader2D, nullptr, 0);
-        m_context->PSSetShader(m_pixelShader, nullptr, 0);
+        m_context->PSSetShader(m_pixelShader2D, nullptr, 0);
         m_context->Draw(static_cast<UINT>(m_frame2DVertices.size()), 0);
     }
 
@@ -915,15 +1295,20 @@ float4 PSMain(VSOutput input) : SV_TARGET
         m_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         m_context->VSSetShader(m_vertexShader3D, nullptr, 0);
         m_context->VSSetConstantBuffers(0, 1, &m_constantBuffer);
-        m_context->PSSetShader(m_pixelShader, nullptr, 0);
+        m_context->PSSetShader(m_pixelShader3D, nullptr, 0);
+        m_context->PSSetConstantBuffers(0, 1, &m_constantBuffer);
+        m_context->PSSetSamplers(0, 1, &m_samplerState);
 
         for (const D3D11DrawBatch& batch : m_3DDrawBatches)
         {
+            ID3D11ShaderResourceView* textureView = GetOrCreateTextureView(batch.Texture);
+            m_context->PSSetShaderResources(0, 1, &textureView);
+
             m_context->UpdateSubresource(
                 m_constantBuffer,
                 0,
                 nullptr,
-                &batch.ModelViewProjection,
+                &batch.Constants,
                 0,
                 0
             );
@@ -933,6 +1318,9 @@ float4 PSMain(VSOutput input) : SV_TARGET
                 static_cast<UINT>(batch.StartVertex)
             );
         }
+
+        ID3D11ShaderResourceView* nullTexture = nullptr;
+        m_context->PSSetShaderResources(0, 1, &nullTexture);
     }
 
     const char* D3D11Renderer::GetName() const
@@ -958,10 +1346,25 @@ float4 PSMain(VSOutput input) : SV_TARGET
             m_vertexBuffer = nullptr;
         }
 
+        for (auto& textureView : m_textureViews)
+        {
+            if (textureView.second)
+            {
+                textureView.second->Release();
+            }
+        }
+        m_textureViews.clear();
+
         if (m_constantBuffer)
         {
             m_constantBuffer->Release();
             m_constantBuffer = nullptr;
+        }
+
+        if (m_samplerState)
+        {
+            m_samplerState->Release();
+            m_samplerState = nullptr;
         }
 
         if (m_rasterizerState)
@@ -976,10 +1379,16 @@ float4 PSMain(VSOutput input) : SV_TARGET
             m_inputLayout = nullptr;
         }
 
-        if (m_pixelShader)
+        if (m_pixelShader3D)
         {
-            m_pixelShader->Release();
-            m_pixelShader = nullptr;
+            m_pixelShader3D->Release();
+            m_pixelShader3D = nullptr;
+        }
+
+        if (m_pixelShader2D)
+        {
+            m_pixelShader2D->Release();
+            m_pixelShader2D = nullptr;
         }
 
         if (m_vertexShader3D)

@@ -1,41 +1,68 @@
 #include "Cube.h"
 
+#include <algorithm>
+#include <cstdint>
+
 namespace Jevaing::Internal::Geometry3D
 {
     namespace
     {
-        Color Shade(float factor)
+        void ExpandBounds(Bounds3D& bounds, const Vec3& position)
         {
-            return { factor, factor, factor, 1.0f };
+            if (!bounds.Valid)
+            {
+                bounds.Min = position;
+                bounds.Max = position;
+                bounds.Valid = true;
+                return;
+            }
+
+            bounds.Min.X = std::min(bounds.Min.X, position.X);
+            bounds.Min.Y = std::min(bounds.Min.Y, position.Y);
+            bounds.Min.Z = std::min(bounds.Min.Z, position.Z);
+            bounds.Max.X = std::max(bounds.Max.X, position.X);
+            bounds.Max.Y = std::max(bounds.Max.Y, position.Y);
+            bounds.Max.Z = std::max(bounds.Max.Z, position.Z);
         }
 
-        void AppendVertex(Mesh& mesh, const Vec3& position, const Color& color)
-        {
-            mesh.Vertices.push_back({ position, color });
-        }
-
-        void AppendQuad(
+        void AppendFace(
             Mesh& mesh,
             const Vec3& a,
             const Vec3& b,
             const Vec3& c,
             const Vec3& d,
-            const Color& color
+            const Vec3& normal
         )
         {
-            AppendVertex(mesh, a, color);
-            AppendVertex(mesh, b, color);
-            AppendVertex(mesh, c, color);
-            AppendVertex(mesh, a, color);
-            AppendVertex(mesh, c, color);
-            AppendVertex(mesh, d, color);
+            const std::uint32_t start = static_cast<std::uint32_t>(mesh.Vertices.size());
+
+            mesh.Vertices.push_back({ a, normal, { 0.0f, 0.0f } });
+            mesh.Vertices.push_back({ b, normal, { 1.0f, 0.0f } });
+            mesh.Vertices.push_back({ c, normal, { 1.0f, 1.0f } });
+            mesh.Vertices.push_back({ d, normal, { 0.0f, 1.0f } });
+
+            mesh.Indices.push_back(start + 0);
+            mesh.Indices.push_back(start + 1);
+            mesh.Indices.push_back(start + 2);
+            mesh.Indices.push_back(start + 0);
+            mesh.Indices.push_back(start + 2);
+            mesh.Indices.push_back(start + 3);
+
+            ExpandBounds(mesh.Bounds, a);
+            ExpandBounds(mesh.Bounds, b);
+            ExpandBounds(mesh.Bounds, c);
+            ExpandBounds(mesh.Bounds, d);
         }
     }
 
     Mesh CreateCubeMesh()
     {
         Mesh mesh;
-        mesh.Vertices.reserve(36);
+        mesh.Name = "Jevaing Cube";
+        mesh.Vertices.reserve(24);
+        mesh.Indices.reserve(36);
+        mesh.HasNormals = true;
+        mesh.HasUV0 = true;
 
         constexpr float HalfSize = 0.5f;
 
@@ -49,58 +76,80 @@ namespace Jevaing::Internal::Geometry3D
         const Vec3 backBottomRight = { HalfSize, -HalfSize, HalfSize };
         const Vec3 backBottomLeft = { -HalfSize, -HalfSize, HalfSize };
 
-        AppendQuad(
+        AppendFace(
             mesh,
             frontTopLeft,
             frontTopRight,
             frontBottomRight,
             frontBottomLeft,
-            Shade(1.00f)
+            { 0.0f, 0.0f, -1.0f }
         );
 
-        AppendQuad(
+        AppendFace(
             mesh,
             backTopRight,
             backTopLeft,
             backBottomLeft,
             backBottomRight,
-            Shade(0.58f)
+            { 0.0f, 0.0f, 1.0f }
         );
 
-        AppendQuad(
+        AppendFace(
             mesh,
             backTopLeft,
             frontTopLeft,
             frontBottomLeft,
             backBottomLeft,
-            Shade(0.72f)
+            { -1.0f, 0.0f, 0.0f }
         );
 
-        AppendQuad(
+        AppendFace(
             mesh,
             frontTopRight,
             backTopRight,
             backBottomRight,
             frontBottomRight,
-            Shade(0.84f)
+            { 1.0f, 0.0f, 0.0f }
         );
 
-        AppendQuad(
+        AppendFace(
             mesh,
             backTopLeft,
             backTopRight,
             frontTopRight,
             frontTopLeft,
-            Shade(1.12f)
+            { 0.0f, 1.0f, 0.0f }
         );
 
-        AppendQuad(
+        AppendFace(
             mesh,
             frontBottomLeft,
             frontBottomRight,
             backBottomRight,
             backBottomLeft,
-            Shade(0.46f)
+            { 0.0f, -1.0f, 0.0f }
+        );
+
+        return mesh;
+    }
+
+    Mesh CreatePlaneMesh()
+    {
+        Mesh mesh;
+        mesh.Name = "Jevaing Plane";
+        mesh.Vertices.reserve(4);
+        mesh.Indices.reserve(6);
+        mesh.HasNormals = true;
+        mesh.HasUV0 = true;
+
+        constexpr float HalfSize = 0.5f;
+        AppendFace(
+            mesh,
+            { -HalfSize, 0.0f, -HalfSize },
+            { HalfSize, 0.0f, -HalfSize },
+            { HalfSize, 0.0f, HalfSize },
+            { -HalfSize, 0.0f, HalfSize },
+            { 0.0f, 1.0f, 0.0f }
         );
 
         return mesh;

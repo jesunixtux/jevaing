@@ -1,5 +1,6 @@
 #include <chrono>
 #include <cstdint>
+#include <fstream>
 #include <filesystem>
 #include <iostream>
 #include <memory>
@@ -9,8 +10,6 @@
 #include <Jevaing/Game.h>
 #include <Jevaing/Input.h>
 #include <Jevaing/Jevaing.h>
-
-#include <geometry/3D/ModelLoader.h>
 
 #include "Application.h"
 #include "CommandLine.h"
@@ -61,25 +60,23 @@ namespace Jevaing::Internal
             return directPath.string();
         }
 
-        bool PrepareExternalTestMesh(
+        bool PrepareModelAsset(
             const std::string& relativePath,
-            std::shared_ptr<const Geometry3D::Mesh>& outputMesh,
+            std::shared_ptr<const Model>& outputModel,
             std::string& error
         )
         {
             const std::string resolvedPath = ResolveTestAssetPath(relativePath);
-            auto mesh = std::make_shared<Geometry3D::Mesh>();
 
-            Geometry3D::ModelLoadOptions loadOptions;
-            loadOptions.CenterAndNormalize = true;
-            loadOptions.TargetExtent = 1.8f;
+            if (!std::filesystem::exists(std::filesystem::path(resolvedPath)))
+            {
+                error = "Model file does not exist: " + relativePath;
+                return false;
+            }
 
-            if (!Geometry3D::ModelLoader::Load(
-                resolvedPath,
-                *mesh,
-                loadOptions,
-                error
-            ))
+            outputModel = Assets::LoadModel(resolvedPath, &error);
+
+            if (!outputModel)
             {
                 return false;
             }
@@ -88,12 +85,141 @@ namespace Jevaing::Internal
                 "Loaded external 3D test model: " +
                 relativePath +
                 " (" +
-                std::to_string(mesh->TriangleCount()) +
+                std::to_string(outputModel->TriangleCount()) +
                 " triangles)"
             );
-
-            outputMesh = mesh;
             return true;
+        }
+
+        std::size_t CountTextureReferences(const Model& model)
+        {
+            std::size_t count = 0;
+
+            for (const Material& material : model.Materials)
+            {
+                if (!material.BaseColorTexturePath.empty() || material.BaseColorTexture)
+                {
+                    ++count;
+                }
+            }
+
+            return count;
+        }
+
+        void PrintBounds(const Bounds3D& bounds)
+        {
+            if (!bounds.Valid)
+            {
+                std::cout << "Bounds: unknown" << std::endl;
+                return;
+            }
+
+            std::cout
+                << "Bounds: min("
+                << bounds.Min.X << ", "
+                << bounds.Min.Y << ", "
+                << bounds.Min.Z << ") max("
+                << bounds.Max.X << ", "
+                << bounds.Max.Y << ", "
+                << bounds.Max.Z << ")"
+                << std::endl;
+        }
+
+        int RunAssetInfo(const std::string& path)
+        {
+            std::shared_ptr<const Model> model;
+            std::string error;
+
+            if (!PrepareModelAsset(path, model, error))
+            {
+                Logger::Error(error);
+                return 2;
+            }
+
+            std::cout << "Path: " << model->SourcePath << std::endl;
+            std::cout << "Format: " << model->Format << std::endl;
+            std::cout << "Meshes: " << model->Meshes.size() << std::endl;
+            std::cout << "Vertices: " << model->VertexCount() << std::endl;
+            std::cout << "Indices: " << model->IndexCount() << std::endl;
+            std::cout << "Triangles: " << model->TriangleCount() << std::endl;
+            std::cout << "Materials: " << model->Materials.size() << std::endl;
+            std::cout << "Textures: " << CountTextureReferences(*model) << std::endl;
+            std::cout << "Normals: " << (model->HasNormals() ? "yes" : "no") << std::endl;
+            std::cout << "UV0: " << (model->HasUV0() ? "yes" : "no") << std::endl;
+            PrintBounds(model->Bounds);
+            return 0;
+        }
+
+        int RunAssetCacheTest()
+        {
+            constexpr const char* TuxPath = "geometry/3D/.hide/easter/tux.glb";
+
+            Assets::ClearCache();
+
+            std::string error;
+            auto first = Assets::LoadModel(ResolveTestAssetPath(TuxPath), &error);
+            auto second = Assets::LoadModel(ResolveTestAssetPath(TuxPath), &error);
+            auto third = Assets::LoadModel(ResolveTestAssetPath(TuxPath), &error);
+
+            const std::size_t importCount =
+                Assets::GetModelImportCountForPath(ResolveTestAssetPath(TuxPath));
+
+            const bool success =
+                first &&
+                second &&
+                third &&
+                first.get() == second.get() &&
+                second.get() == third.get() &&
+                importCount == 1;
+
+            if (success)
+            {
+                Logger::Info("[PASS] AssetManager cache reused the model import once.");
+                return 0;
+            }
+
+            Logger::Error(
+                "[FAIL] AssetManager cache test failed. Import count: " +
+                std::to_string(importCount) +
+                " Error: " +
+                error
+            );
+            return 2;
+        }
+
+        int RunAssetErrorTest()
+        {
+            bool success = true;
+            std::string error;
+
+            auto missing = Assets::LoadModel("geometry/3D/does-not-exist.glb", &error);
+            success &= ReportTest(!missing && !error.empty(), "Missing model path fails cleanly");
+
+            auto unsupported = Assets::LoadModel("README.md", &error);
+            success &= ReportTest(!unsupported && !error.empty(), "Unsupported extension fails cleanly");
+
+            const std::filesystem::path invalidPath =
+                std::filesystem::temp_directory_path() / "jevaing-invalid-model.glb";
+
+            {
+                std::ofstream invalidFile(invalidPath, std::ios::binary);
+                invalidFile << "not a real glb";
+            }
+
+            auto invalid = Assets::LoadModel(invalidPath.string(), &error);
+            success &= ReportTest(!invalid && !error.empty(), "Invalid model data fails cleanly");
+
+            std::error_code removeError;
+            std::filesystem::remove(invalidPath, removeError);
+
+            if (success)
+            {
+                Logger::Info("[PASS] Asset error paths completed without crashes.");
+                return 0;
+            }
+
+            Logger::Error("[FAIL] Asset error paths did not behave as expected.");
+            return 2;
         }
 
         int RunSelfTests()
@@ -274,6 +400,21 @@ namespace Jevaing::Internal
             return RunSelfTests();
         }
 
+        if (options.AssetInfo)
+        {
+            return RunAssetInfo(options.AssetInfoPath);
+        }
+
+        if (options.AssetCacheTest)
+        {
+            return RunAssetCacheTest();
+        }
+
+        if (options.AssetErrorTest)
+        {
+            return RunAssetErrorTest();
+        }
+
         if (options.ShowRendererInfo)
         {
             PrintRendererInfo();
@@ -285,7 +426,13 @@ namespace Jevaing::Internal
             (options.PenguinGraphicsTest ? 1 : 0) +
             (options.GraphicsTest3D ? 1 : 0) +
             (options.PenguinTest3D ? 1 : 0) +
-            (options.Gummy3DTest ? 1 : 0);
+            (options.Gummy3DTest ? 1 : 0) +
+            (options.ModelTest ? 1 : 0) +
+            (options.TextureTest ? 1 : 0) +
+            (options.MaterialTest ? 1 : 0) +
+            (options.LightingTest ? 1 : 0) +
+            (options.MultiModelTest ? 1 : 0) +
+            (options.Mixed2D3DTest ? 1 : 0);
 
         if (graphicsTestCount > 1)
         {
@@ -298,7 +445,13 @@ namespace Jevaing::Internal
             options.PenguinGraphicsTest ||
             options.GraphicsTest3D ||
             options.PenguinTest3D ||
-            options.Gummy3DTest;
+            options.Gummy3DTest ||
+            options.ModelTest ||
+            options.TextureTest ||
+            options.MaterialTest ||
+            options.LightingTest ||
+            options.MultiModelTest ||
+            options.Mixed2D3DTest;
 
         if (options.RuntimeTest && graphicsTestRequested)
         {
@@ -371,30 +524,51 @@ namespace Jevaing::Internal
             return 2;
         }
 
-        std::shared_ptr<const Geometry3D::Mesh> externalTestMesh;
-        Color externalTestTint = { 1.0f, 1.0f, 1.0f, 1.0f };
+        std::shared_ptr<const Model> primaryTestModel;
+        std::shared_ptr<const Model> secondaryTestModel;
+        std::shared_ptr<const Texture2D> testTexture;
 
         if (options.PenguinTest3D)
         {
             std::string loadError;
-            if (!PrepareExternalTestMesh(
+            if (!PrepareModelAsset(
                 "geometry/3D/.hide/easter/tux.glb",
-                externalTestMesh,
+                primaryTestModel,
                 loadError
             ))
             {
                 Logger::Error(loadError);
                 return 2;
             }
-
-            externalTestTint = { 0.88f, 0.95f, 1.0f, 1.0f };
         }
         else if (options.Gummy3DTest)
         {
             std::string loadError;
-            if (!PrepareExternalTestMesh(
+            if (!PrepareModelAsset(
                 "geometry/3D/.hide/easter/gummybear.fbx",
-                externalTestMesh,
+                primaryTestModel,
+                loadError
+            ))
+            {
+                Logger::Error(loadError);
+                return 2;
+            }
+        }
+        else if (options.ModelTest)
+        {
+            std::string loadError;
+            if (!PrepareModelAsset(options.ModelTestPath, primaryTestModel, loadError))
+            {
+                Logger::Error(loadError);
+                return 2;
+            }
+        }
+        else if (options.MultiModelTest)
+        {
+            std::string loadError;
+            if (!PrepareModelAsset(
+                "geometry/3D/.hide/easter/tux.glb",
+                primaryTestModel,
                 loadError
             ))
             {
@@ -402,7 +576,20 @@ namespace Jevaing::Internal
                 return 2;
             }
 
-            externalTestTint = { 1.0f, 0.62f, 0.48f, 1.0f };
+            if (!PrepareModelAsset(
+                "geometry/3D/.hide/easter/gummybear.fbx",
+                secondaryTestModel,
+                loadError
+            ))
+            {
+                Logger::Error(loadError);
+                return 2;
+            }
+        }
+
+        if (options.TextureTest || options.MaterialTest)
+        {
+            testTexture = Assets::CreateCheckerTexture();
         }
 
         WindowConfig windowConfig;
@@ -429,6 +616,9 @@ namespace Jevaing::Internal
 
         RendererConfig rendererConfig;
         rendererConfig.Backend = selectedBackend;
+        rendererConfig.TestModel = primaryTestModel;
+        rendererConfig.SecondaryTestModel = secondaryTestModel;
+        rendererConfig.TestTexture = testTexture;
 
         if (options.PenguinGraphicsTest)
         {
@@ -438,11 +628,29 @@ namespace Jevaing::Internal
         {
             rendererConfig.TestPattern = RendererTestPattern::Cube;
         }
-        else if (options.PenguinTest3D || options.Gummy3DTest)
+        else if (options.PenguinTest3D || options.Gummy3DTest || options.ModelTest)
         {
             rendererConfig.TestPattern = RendererTestPattern::ExternalModel;
-            rendererConfig.TestMesh = externalTestMesh;
-            rendererConfig.TestMeshTint = externalTestTint;
+        }
+        else if (options.TextureTest)
+        {
+            rendererConfig.TestPattern = RendererTestPattern::Texture;
+        }
+        else if (options.MaterialTest)
+        {
+            rendererConfig.TestPattern = RendererTestPattern::Material;
+        }
+        else if (options.LightingTest)
+        {
+            rendererConfig.TestPattern = RendererTestPattern::Lighting;
+        }
+        else if (options.MultiModelTest)
+        {
+            rendererConfig.TestPattern = RendererTestPattern::MultiModel;
+        }
+        else if (options.Mixed2D3DTest)
+        {
+            rendererConfig.TestPattern = RendererTestPattern::Mixed2D3D;
         }
         else if (options.GraphicsTest || !game)
         {
@@ -487,6 +695,30 @@ namespace Jevaing::Internal
         else if (options.Gummy3DTest)
         {
             Logger::Info("External gummy bear FBX 3D test enabled.");
+        }
+        else if (options.ModelTest)
+        {
+            Logger::Info("Generic model 3D test enabled: " + options.ModelTestPath);
+        }
+        else if (options.TextureTest)
+        {
+            Logger::Info("Texture2D test enabled.");
+        }
+        else if (options.MaterialTest)
+        {
+            Logger::Info("Material test enabled.");
+        }
+        else if (options.LightingTest)
+        {
+            Logger::Info("Directional lighting test enabled.");
+        }
+        else if (options.MultiModelTest)
+        {
+            Logger::Info("Multi-model asset test enabled.");
+        }
+        else if (options.Mixed2D3DTest)
+        {
+            Logger::Info("Mixed 2D + 3D test enabled.");
         }
         else if (options.GraphicsTest)
         {
@@ -633,6 +865,30 @@ namespace Jevaing::Internal
         else if (exitCode == 0 && options.Gummy3DTest)
         {
             Logger::Info("[PASS] Gummy bear FBX external-model test completed.");
+        }
+        else if (exitCode == 0 && options.ModelTest)
+        {
+            Logger::Info("[PASS] Generic model test completed.");
+        }
+        else if (exitCode == 0 && options.TextureTest)
+        {
+            Logger::Info("[PASS] Texture2D test completed.");
+        }
+        else if (exitCode == 0 && options.MaterialTest)
+        {
+            Logger::Info("[PASS] Material test completed.");
+        }
+        else if (exitCode == 0 && options.LightingTest)
+        {
+            Logger::Info("[PASS] Directional lighting test completed.");
+        }
+        else if (exitCode == 0 && options.MultiModelTest)
+        {
+            Logger::Info("[PASS] Multi-model test completed.");
+        }
+        else if (exitCode == 0 && options.Mixed2D3DTest)
+        {
+            Logger::Info("[PASS] Mixed 2D + 3D test completed.");
         }
         else if (exitCode == 0 && options.GraphicsTest)
         {

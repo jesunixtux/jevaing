@@ -5,4 +5,5 @@
 namespace Jevaing::Internal::Geometry3D
 {
     Mesh CreateCubeMesh();
+    Mesh CreatePlaneMesh();
 }

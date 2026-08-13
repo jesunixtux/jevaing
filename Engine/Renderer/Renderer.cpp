@@ -68,6 +68,18 @@ namespace Jevaing::Internal
             {
             }
 
+            void DrawMesh(
+                const Mesh&,
+                const Transform&,
+                const Material&
+            ) override
+            {
+            }
+
+            void SetDirectionalLight(const DirectionalLight&) override
+            {
+            }
+
             const char* GetName() const override
             {
                 return "Null Renderer";

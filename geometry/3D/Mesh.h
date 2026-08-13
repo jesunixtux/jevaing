@@ -1,30 +1,13 @@
 #pragma once
 
-#include <cstddef>
-#include <vector>
-
-#include <Jevaing/Types.h>
+#include <Jevaing/Assets.h>
 
 namespace Jevaing::Internal::Geometry3D
 {
-    struct MeshVertex
-    {
-        Vec3 Position = {};
-        Color VertexColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-    };
-
-    struct Mesh
-    {
-        std::vector<MeshVertex> Vertices;
-
-        bool Empty() const
-        {
-            return Vertices.empty();
-        }
-
-        std::size_t TriangleCount() const
-        {
-            return Vertices.size() / 3;
-        }
-    };
+    using Bounds3D = Jevaing::Bounds3D;
+    using Material = Jevaing::Material;
+    using Mesh = Jevaing::Mesh;
+    using Model = Jevaing::Model;
+    using Texture2D = Jevaing::Texture2D;
+    using Vertex3D = Jevaing::Vertex3D;
 }
