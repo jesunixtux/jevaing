@@ -162,6 +162,11 @@ namespace Jevaing::Platform
         return true;
     }
 
+    void* WindowsWindow::GetNativeHandle() const
+    {
+        return static_cast<void*>(m_window);
+    }
+
     LRESULT CALLBACK WindowsWindow::WindowProc(
         HWND hwnd,
         UINT message,
