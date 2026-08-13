@@ -9,7 +9,10 @@
 #include <Jevaing/Jevaing.h>
 
 #include <algorithm>
+#include <cmath>
+#include <cctype>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <optional>
 #include <string>
@@ -41,13 +44,27 @@ namespace
     {
         bool HasProject = false;
         bool Playing = false;
+        bool Paused = false;
+        bool StepRequested = false;
         bool DirtyScene = false;
         bool ShowInfo = true;
+        bool ShowProjectBrowser = true;
+        bool ShowHierarchy = true;
+        bool ShowScene = true;
+        bool ShowGame = true;
+        bool ShowInspector = true;
+        bool ShowProject = true;
+        bool ShowConsole = true;
+        bool ShowBuildSettings = true;
+        bool RequestUnsavedPopup = false;
         std::string NewProjectName = "MyGame";
         std::string NewProjectLocation;
         std::string OpenProjectPath;
         std::string CurrentScenePath;
         std::string PlaySnapshotPath;
+        std::string PendingPath;
+        std::string ProjectSelectedDirectory;
+        std::string NewAssetName = "NewScript.cpp";
         Jevaing::ProjectConfig Project;
         Jevaing::Scene EditScene{"Untitled"};
         Jevaing::Scene PlayScene{"Play"};
@@ -59,11 +76,25 @@ namespace
         bool ShowErrorLogs = true;
     };
 
+    enum class PendingEditorAction
+    {
+        None,
+        Exit,
+        CloseProject,
+        LoadProject,
+        LoadScene
+    };
+
     ID3D11Device* g_device = nullptr;
     ID3D11DeviceContext* g_context = nullptr;
     IDXGISwapChain* g_swapChain = nullptr;
     ID3D11RenderTargetView* g_renderTargetView = nullptr;
+    HWND g_hwnd = nullptr;
     EditorState g_editor;
+    PendingEditorAction g_pendingAction = PendingEditorAction::None;
+
+    void RequestPendingAction(PendingEditorAction action, const std::string& path = {});
+    void StopPlayMode();
 
     void AddConsoleLog(
         Jevaing::Internal::LogLevel level,
@@ -200,7 +231,12 @@ namespace
                 break;
 
             case WM_DESTROY:
+                g_hwnd = nullptr;
                 PostQuitMessage(0);
+                return 0;
+
+            case WM_CLOSE:
+                RequestPendingAction(PendingEditorAction::Exit);
                 return 0;
         }
 
@@ -251,7 +287,12 @@ namespace
         g_editor.CurrentScenePath = scenePath;
         g_editor.HasProject = true;
         g_editor.Playing = false;
+        g_editor.Paused = false;
+        g_editor.StepRequested = false;
+        g_editor.DirtyScene = false;
         g_editor.SelectedEntity = Jevaing::InvalidEntityId;
+        g_editor.ProjectSelectedDirectory =
+            (std::filesystem::path(config.ProjectDirectory) / config.AssetRoot).string();
         g_editor.BuildSettings.StartupScene = config.StartupScene;
         g_editor.BuildSettings.ScenesInBuild = { config.StartupScene };
         Jevaing::Internal::Logger::Info("Opened project: " + config.Name);
@@ -274,6 +315,95 @@ namespace
 
         g_editor.DirtyScene = false;
         Jevaing::Internal::Logger::Info("Saved scene: " + g_editor.CurrentScenePath);
+    }
+
+    bool LoadSceneFile(const std::string& scenePath)
+    {
+        if (!g_editor.HasProject)
+        {
+            return false;
+        }
+
+        std::string error;
+        Jevaing::Scene scene;
+        const std::string assetRoot =
+            Jevaing::Project::ResolvePath(g_editor.Project, g_editor.Project.AssetRoot);
+
+        if (!scene.Load(scenePath, assetRoot, error))
+        {
+            Jevaing::Internal::Logger::Error(error);
+            return false;
+        }
+
+        StopPlayMode();
+        g_editor.EditScene = std::move(scene);
+        g_editor.CurrentScenePath = scenePath;
+        g_editor.SelectedEntity = Jevaing::InvalidEntityId;
+        g_editor.DirtyScene = false;
+        Jevaing::Internal::Logger::Info("Loaded scene: " + scenePath);
+        return true;
+    }
+
+    void CloseProject()
+    {
+        StopPlayMode();
+        g_editor.HasProject = false;
+        g_editor.DirtyScene = false;
+        g_editor.CurrentScenePath.clear();
+        g_editor.PlaySnapshotPath.clear();
+        g_editor.PendingPath.clear();
+        g_editor.ProjectSelectedDirectory.clear();
+        g_editor.Project = Jevaing::ProjectConfig{};
+        g_editor.EditScene = Jevaing::Scene{"Untitled"};
+        g_editor.PlayScene = Jevaing::Scene{"Play"};
+        g_editor.SelectedEntity = Jevaing::InvalidEntityId;
+        g_editor.ShowProjectBrowser = true;
+        Jevaing::Internal::Logger::Info("Closed project.");
+    }
+
+    void ExecutePendingAction()
+    {
+        const PendingEditorAction action = g_pendingAction;
+        const std::string path = g_editor.PendingPath;
+        g_pendingAction = PendingEditorAction::None;
+        g_editor.PendingPath.clear();
+
+        switch (action)
+        {
+            case PendingEditorAction::Exit:
+                PostQuitMessage(0);
+                break;
+
+            case PendingEditorAction::CloseProject:
+                CloseProject();
+                break;
+
+            case PendingEditorAction::LoadProject:
+                LoadProject(path);
+                break;
+
+            case PendingEditorAction::LoadScene:
+                LoadSceneFile(path);
+                break;
+
+            case PendingEditorAction::None:
+                break;
+        }
+    }
+
+    void RequestPendingAction(PendingEditorAction action, const std::string& path)
+    {
+        if (g_editor.DirtyScene)
+        {
+            g_pendingAction = action;
+            g_editor.PendingPath = path;
+            g_editor.RequestUnsavedPopup = true;
+            return;
+        }
+
+        g_pendingAction = action;
+        g_editor.PendingPath = path;
+        ExecutePendingAction();
     }
 
     Jevaing::Scene& ActiveScene()
@@ -313,6 +443,8 @@ namespace
         g_editor.PlaySnapshotPath = snapshot.string();
         g_editor.PlayScene = std::move(playScene);
         g_editor.Playing = true;
+        g_editor.Paused = false;
+        g_editor.StepRequested = false;
         Jevaing::Internal::Logger::Info("Play Mode started.");
     }
 
@@ -325,13 +457,19 @@ namespace
 
         g_editor.PlayScene = Jevaing::Scene{"Play"};
         g_editor.Playing = false;
+        g_editor.Paused = false;
+        g_editor.StepRequested = false;
         Jevaing::Internal::Logger::Info("Play Mode stopped. Edit Scene restored.");
     }
 
     void RenderProjectBrowser()
     {
         ImGui::SetNextWindowSize(ImVec2(560, 320), ImGuiCond_FirstUseEver);
-        ImGui::Begin("Project Browser", nullptr, ImGuiWindowFlags_NoCollapse);
+        if (!ImGui::Begin("Project Browser", &g_editor.ShowProjectBrowser, ImGuiWindowFlags_NoCollapse))
+        {
+            ImGui::End();
+            return;
+        }
         ImGui::TextUnformatted("New Project");
         ImGui::InputText("Project Name", &g_editor.NewProjectName);
         ImGui::InputText("Location", &g_editor.NewProjectLocation);
@@ -349,7 +487,7 @@ namespace
                 error
             ))
             {
-                LoadProject(projectFile);
+                RequestPendingAction(PendingEditorAction::LoadProject, projectFile);
             }
             else
             {
@@ -363,7 +501,7 @@ namespace
 
         if (ImGui::Button("Open Project"))
         {
-            LoadProject(g_editor.OpenProjectPath);
+            RequestPendingAction(PendingEditorAction::LoadProject, g_editor.OpenProjectPath);
         }
 
         ImGui::Separator();
@@ -443,7 +581,13 @@ namespace
 
     void RenderHierarchy()
     {
-        ImGui::Begin("Hierarchy");
+        ImGui::SetNextWindowPos(ImVec2(8, 58), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(280, 380), ImGuiCond_Once);
+        if (!ImGui::Begin("Hierarchy", &g_editor.ShowHierarchy))
+        {
+            ImGui::End();
+            return;
+        }
 
         if (ImGui::Button("Create Empty"))
         {
@@ -496,7 +640,13 @@ namespace
 
     void RenderInspector()
     {
-        ImGui::Begin("Inspector");
+        ImGui::SetNextWindowPos(ImVec2(980, 350), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(340, 360), ImGuiCond_Once);
+        if (!ImGui::Begin("Inspector", &g_editor.ShowInspector))
+        {
+            ImGui::End();
+            return;
+        }
         Jevaing::SceneEntity* entity =
             g_editor.EditScene.FindEntity(g_editor.SelectedEntity);
 
@@ -629,16 +779,95 @@ namespace
         ImGui::End();
     }
 
-    void RenderSceneView(double deltaTime)
+    ImVec2 EntityScreenPosition(
+        const Jevaing::SceneEntity& entity,
+        const ImVec2& center,
+        float scale,
+        const Jevaing::Vec3& offset = {}
+    )
     {
-        if (g_editor.Playing)
+        const Jevaing::Vec3& p = entity.Transform.LocalTransform.Position;
+        return ImVec2(
+            center.x + (p.X - offset.X) * scale,
+            center.y - (p.Y - offset.Y) * scale
+        );
+    }
+
+    ImVec2 EntityScreenSize(const Jevaing::SceneEntity& entity, float scale)
+    {
+        const Jevaing::Vec3& s = entity.Transform.LocalTransform.Scale;
+        return ImVec2(
+            std::max(10.0f, std::fabs(s.X) * scale),
+            std::max(10.0f, std::fabs(s.Y) * scale)
+        );
+    }
+
+    bool PointInEntityRect(
+        const ImVec2& point,
+        const Jevaing::SceneEntity& entity,
+        const ImVec2& center,
+        float scale
+    )
+    {
+        const ImVec2 screen = EntityScreenPosition(entity, center, scale);
+        const ImVec2 size = EntityScreenSize(entity, scale);
+        return
+            point.x >= screen.x - size.x * 0.5f &&
+            point.x <= screen.x + size.x * 0.5f &&
+            point.y >= screen.y - size.y * 0.5f &&
+            point.y <= screen.y + size.y * 0.5f;
+    }
+
+    void DrawSceneEntity(
+        ImDrawList* drawList,
+        const Jevaing::SceneEntity& entity,
+        const ImVec2& center,
+        float scale,
+        bool selected,
+        const Jevaing::Vec3& offset = {}
+    )
+    {
+        const ImVec2 screen = EntityScreenPosition(entity, center, scale, offset);
+        const ImVec2 size = EntityScreenSize(entity, scale);
+        const ImU32 color =
+            selected
+                ? IM_COL32(255, 210, 75, 255)
+                : entity.Camera
+                    ? IM_COL32(120, 230, 150, 255)
+                    : IM_COL32(95, 180, 255, 255);
+
+        drawList->AddRect(
+            ImVec2(screen.x - size.x * 0.5f, screen.y - size.y * 0.5f),
+            ImVec2(screen.x + size.x * 0.5f, screen.y + size.y * 0.5f),
+            color,
+            0.0f,
+            0,
+            selected ? 3.0f : 1.5f
+        );
+        drawList->AddText(ImVec2(screen.x + 6.0f, screen.y - 18.0f), color, entity.Name.c_str());
+    }
+
+    void RenderSceneView()
+    {
+        ImGui::SetNextWindowPos(ImVec2(300, 58), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(560, 380), ImGuiCond_Once);
+        if (!ImGui::Begin("Scene", &g_editor.ShowScene))
         {
-            g_editor.PlayScene.Update(deltaTime);
+            ImGui::End();
+            return;
         }
 
-        ImGui::Begin("Scene View");
         const ImVec2 origin = ImGui::GetCursorScreenPos();
         const ImVec2 size = ImGui::GetContentRegionAvail();
+        ImGui::InvisibleButton(
+            "SceneCanvas",
+            size,
+            ImGuiButtonFlags_MouseButtonLeft
+        );
+
+        const bool hovered = ImGui::IsItemHovered();
+        const bool active = ImGui::IsItemActive();
+        const ImVec2 mouse = ImGui::GetIO().MousePos;
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         drawList->AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + size.y), IM_COL32(22, 24, 28, 255));
 
@@ -653,33 +882,267 @@ namespace
             drawList->AddLine(ImVec2(origin.x, y), ImVec2(origin.x + size.x, y), IM_COL32(48, 52, 58, 255));
         }
 
-        for (const Jevaing::SceneEntity& entity : ActiveScene().GetEntities())
+        if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
-            const Jevaing::Vec3& p = entity.Transform.LocalTransform.Position;
-            const Jevaing::Vec3& s = entity.Transform.LocalTransform.Scale;
-            const ImVec2 screen(center.x + p.X * scale, center.y - p.Y * scale);
-            const float w = std::max(10.0f, std::fabs(s.X) * scale);
-            const float h = std::max(10.0f, std::fabs(s.Y) * scale);
-            const bool selected = entity.Id == g_editor.SelectedEntity && !g_editor.Playing;
-            const ImU32 color = selected ? IM_COL32(255, 210, 75, 255) : IM_COL32(95, 180, 255, 255);
-            drawList->AddRect(
-                ImVec2(screen.x - w * 0.5f, screen.y - h * 0.5f),
-                ImVec2(screen.x + w * 0.5f, screen.y + h * 0.5f),
-                color,
-                0.0f,
-                0,
-                selected ? 3.0f : 1.5f
-            );
-            drawList->AddText(ImVec2(screen.x + 6.0f, screen.y - 18.0f), color, entity.Name.c_str());
+            g_editor.SelectedEntity = Jevaing::InvalidEntityId;
+            std::vector<Jevaing::SceneEntity>& entities = g_editor.EditScene.GetEntities();
+            for (auto it = entities.rbegin(); it != entities.rend(); ++it)
+            {
+                if (PointInEntityRect(mouse, *it, center, scale))
+                {
+                    g_editor.SelectedEntity = it->Id;
+                    break;
+                }
+            }
         }
 
-        ImGui::Dummy(size);
+        if (active && !g_editor.Playing && g_editor.SelectedEntity != Jevaing::InvalidEntityId)
+        {
+            Jevaing::SceneEntity* entity =
+                g_editor.EditScene.FindEntity(g_editor.SelectedEntity);
+            if (entity && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f))
+            {
+                entity->Transform.LocalTransform.Position.X = (mouse.x - center.x) / scale;
+                entity->Transform.LocalTransform.Position.Y = -(mouse.y - center.y) / scale;
+                g_editor.DirtyScene = true;
+            }
+        }
+
+        for (const Jevaing::SceneEntity& entity : g_editor.EditScene.GetEntities())
+        {
+            DrawSceneEntity(
+                drawList,
+                entity,
+                center,
+                scale,
+                entity.Id == g_editor.SelectedEntity
+            );
+        }
+
         ImGui::End();
     }
 
-    void RenderAssets()
+    void RenderGameView()
     {
-        ImGui::Begin("Project / Assets");
+        ImGui::SetNextWindowPos(ImVec2(872, 58), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(430, 280), ImGuiCond_Once);
+        if (!ImGui::Begin("Game", &g_editor.ShowGame))
+        {
+            ImGui::End();
+            return;
+        }
+
+        const ImVec2 origin = ImGui::GetCursorScreenPos();
+        const ImVec2 available = ImGui::GetContentRegionAvail();
+        ImGui::InvisibleButton("GameCanvas", available);
+
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        drawList->AddRectFilled(
+            origin,
+            ImVec2(origin.x + available.x, origin.y + available.y),
+            IM_COL32(12, 13, 16, 255)
+        );
+
+        const float targetAspect = 16.0f / 9.0f;
+        float width = available.x;
+        float height = width / targetAspect;
+        if (height > available.y)
+        {
+            height = available.y;
+            width = height * targetAspect;
+        }
+
+        const ImVec2 frameMin(
+            origin.x + (available.x - width) * 0.5f,
+            origin.y + (available.y - height) * 0.5f
+        );
+        const ImVec2 frameMax(frameMin.x + width, frameMin.y + height);
+        drawList->AddRectFilled(frameMin, frameMax, IM_COL32(24, 26, 31, 255));
+        drawList->AddRect(frameMin, frameMax, IM_COL32(75, 82, 94, 255));
+
+        const Jevaing::Scene& scene = ActiveScene();
+        const Jevaing::SceneEntity* cameraEntity = nullptr;
+        for (const Jevaing::SceneEntity& entity : scene.GetEntities())
+        {
+            if (entity.Camera && (!cameraEntity || entity.Camera->Primary))
+            {
+                cameraEntity = &entity;
+                if (entity.Camera->Primary)
+                {
+                    break;
+                }
+            }
+        }
+
+        const Jevaing::Vec3 cameraOffset =
+            cameraEntity
+                ? cameraEntity->Transform.LocalTransform.Position
+                : Jevaing::Vec3{};
+        const ImVec2 center(frameMin.x + width * 0.5f, frameMin.y + height * 0.5f);
+        const float scale = std::max(20.0f, std::min(width, height) * 0.12f);
+
+        for (const Jevaing::SceneEntity& entity : scene.GetEntities())
+        {
+            if (entity.Camera)
+            {
+                continue;
+            }
+
+            DrawSceneEntity(
+                drawList,
+                entity,
+                center,
+                scale,
+                false,
+                cameraOffset
+            );
+        }
+
+        if (g_editor.Playing && g_editor.Paused)
+        {
+            drawList->AddText(
+                ImVec2(frameMin.x + 8.0f, frameMin.y + 8.0f),
+                IM_COL32(255, 210, 75, 255),
+                "Paused"
+            );
+        }
+
+        ImGui::End();
+    }
+
+    std::string LowerExtension(const std::filesystem::path& path)
+    {
+        std::string extension = path.extension().string();
+        std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c)
+        {
+            return static_cast<char>(std::tolower(c));
+        });
+        return extension;
+    }
+
+    bool IsKnownProjectFile(const std::filesystem::path& path)
+    {
+        const std::string extension = LowerExtension(path);
+        return
+            extension == ".scene" ||
+            extension == ".cpp" ||
+            extension == ".c" ||
+            extension == ".h" ||
+            extension == ".hpp" ||
+            extension == ".glb" ||
+            extension == ".gltf" ||
+            extension == ".fbx" ||
+            extension == ".png" ||
+            extension == ".jpg" ||
+            extension == ".jpeg";
+    }
+
+    void WriteProjectTextFile(const std::filesystem::path& path, const std::string& text)
+    {
+        if (std::filesystem::exists(path))
+        {
+            Jevaing::Internal::Logger::Warning("File already exists: " + path.string());
+            return;
+        }
+
+        std::filesystem::create_directories(path.parent_path());
+        std::ofstream file(path);
+        if (!file)
+        {
+            Jevaing::Internal::Logger::Error("Failed to create file: " + path.string());
+            return;
+        }
+
+        file << text;
+        Jevaing::Internal::Logger::Info("Created file: " + path.string());
+    }
+
+    void RenderFolderNode(const std::filesystem::path& path)
+    {
+        const std::string id = path.string();
+        ImGui::PushID(id.c_str());
+        const bool selected = g_editor.ProjectSelectedDirectory == path.string();
+        ImGuiTreeNodeFlags flags =
+            ImGuiTreeNodeFlags_OpenOnArrow |
+            ImGuiTreeNodeFlags_SpanAvailWidth |
+            ImGuiTreeNodeFlags_DefaultOpen;
+        if (selected)
+        {
+            flags |= ImGuiTreeNodeFlags_Selected;
+        }
+
+        const bool open = ImGui::TreeNodeEx(path.filename().string().c_str(), flags);
+        if (ImGui::IsItemClicked())
+        {
+            g_editor.ProjectSelectedDirectory = path.string();
+        }
+
+        if (open)
+        {
+            for (const auto& entry : std::filesystem::directory_iterator(path))
+            {
+                if (entry.is_directory())
+                {
+                    RenderFolderNode(entry.path());
+                }
+            }
+            ImGui::TreePop();
+        }
+        ImGui::PopID();
+    }
+
+    std::filesystem::path CodeCreationDirectory(const std::filesystem::path& selectedDirectory)
+    {
+        const std::filesystem::path sourceDirectory =
+            std::filesystem::path(g_editor.Project.ProjectDirectory) / "Source";
+        std::error_code ec;
+        const std::filesystem::path relative =
+            std::filesystem::relative(selectedDirectory, sourceDirectory, ec);
+        if (!ec && !relative.empty() && *relative.begin() != "..")
+        {
+            return selectedDirectory;
+        }
+
+        return sourceDirectory;
+    }
+
+    void CreateProjectAssetFromMenu(const std::filesystem::path& directory)
+    {
+        const std::filesystem::path codeDirectory = CodeCreationDirectory(directory);
+
+        if (ImGui::MenuItem("C++ Script"))
+        {
+            WriteProjectTextFile(
+                codeDirectory / "NewScript.cpp",
+                "#include <Jevaing/Jevaing.h>\n\nvoid NewScriptTick(double deltaTime)\n{\n    (void)deltaTime;\n}\n"
+            );
+        }
+        if (ImGui::MenuItem("C Source"))
+        {
+            WriteProjectTextFile(
+                codeDirectory / "NewModule.c",
+                "#include \"NewModule.h\"\n\nvoid new_module_tick(float delta_time)\n{\n    (void)delta_time;\n}\n"
+            );
+            WriteProjectTextFile(
+                codeDirectory / "NewModule.h",
+                "#pragma once\n\n#ifdef __cplusplus\nextern \"C\" {\n#endif\n\nvoid new_module_tick(float delta_time);\n\n#ifdef __cplusplus\n}\n#endif\n"
+            );
+        }
+        if (ImGui::MenuItem("Header"))
+        {
+            WriteProjectTextFile(codeDirectory / "NewHeader.h", "#pragma once\n");
+        }
+        if (ImGui::MenuItem("Folder"))
+        {
+            std::filesystem::create_directories(directory / "NewFolder");
+        }
+    }
+
+    void RenderProject()
+    {
+        ImGui::SetNextWindowPos(ImVec2(300, 452), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(650, 240), ImGuiCond_Once);
+        ImGui::Begin("Project", &g_editor.ShowProject);
 
         if (!g_editor.HasProject)
         {
@@ -688,64 +1151,81 @@ namespace
             return;
         }
 
-        const std::filesystem::path assets =
-            std::filesystem::path(g_editor.Project.ProjectDirectory) / g_editor.Project.AssetRoot;
+        const std::filesystem::path projectDir = g_editor.Project.ProjectDirectory;
+        if (g_editor.ProjectSelectedDirectory.empty())
+        {
+            g_editor.ProjectSelectedDirectory =
+                (projectDir / g_editor.Project.AssetRoot).string();
+        }
+
         if (ImGui::Button("Refresh"))
         {
         }
 
-        if (std::filesystem::exists(assets))
-        {
-            for (const auto& entry : std::filesystem::recursive_directory_iterator(assets))
-            {
-                if (!entry.is_regular_file())
-                {
-                    continue;
-                }
+        ImGui::SameLine();
+        ImGui::TextUnformatted(ToRelativeScenePath(g_editor.ProjectSelectedDirectory).c_str());
 
-                const std::string extension = entry.path().extension().string();
-                if (
-                    extension == ".glb" ||
-                    extension == ".gltf" ||
-                    extension == ".fbx" ||
-                    extension == ".png" ||
-                    extension == ".jpg" ||
-                    extension == ".jpeg" ||
-                    extension == ".scene"
-                )
+        if (ImGui::BeginTable("ProjectSplit", 2, ImGuiTableFlags_Resizable | ImGuiTableFlags_BordersInnerV))
+        {
+            ImGui::TableSetupColumn("Folders", ImGuiTableColumnFlags_WidthFixed, 180.0f);
+            ImGui::TableSetupColumn("Assets");
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+
+            const std::filesystem::path roots[] =
+            {
+                projectDir / g_editor.Project.AssetRoot,
+                projectDir / g_editor.Project.SceneRoot,
+                projectDir / "Source"
+            };
+
+            for (const std::filesystem::path& root : roots)
+            {
+                if (std::filesystem::exists(root))
                 {
-                    ImGui::Selectable(entry.path().filename().string().c_str());
+                    RenderFolderNode(root);
                 }
             }
-        }
 
-        const std::filesystem::path scenes =
-            std::filesystem::path(g_editor.Project.ProjectDirectory) / g_editor.Project.SceneRoot;
-        if (std::filesystem::exists(scenes))
-        {
-            for (const auto& entry : std::filesystem::directory_iterator(scenes))
+            ImGui::TableSetColumnIndex(1);
+            const std::filesystem::path selectedDir = g_editor.ProjectSelectedDirectory;
+            if (std::filesystem::exists(selectedDir))
             {
-                if (entry.path().extension() == ".scene")
+                if (ImGui::BeginPopupContextWindow("ProjectCreatePopup"))
                 {
-                    if (ImGui::Selectable(entry.path().filename().string().c_str()))
+                    if (ImGui::BeginMenu("Create"))
                     {
-                        if (ImGui::IsMouseDoubleClicked(0))
+                        CreateProjectAssetFromMenu(selectedDir);
+                        ImGui::EndMenu();
+                    }
+                    ImGui::EndPopup();
+                }
+
+                for (const auto& entry : std::filesystem::directory_iterator(selectedDir))
+                {
+                    if (!entry.is_regular_file() || !IsKnownProjectFile(entry.path()))
+                    {
+                        continue;
+                    }
+
+                    const std::string label = entry.path().filename().string();
+                    if (ImGui::Selectable(label.c_str()))
+                    {
+                        if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
                         {
-                            std::string error;
-                            Jevaing::Scene scene;
-                            if (scene.Load(entry.path().string(), assets.string(), error))
+                            if (LowerExtension(entry.path()) == ".scene")
                             {
-                                g_editor.EditScene = std::move(scene);
-                                g_editor.CurrentScenePath = entry.path().string();
-                            }
-                            else
-                            {
-                                Jevaing::Internal::Logger::Error(error);
+                                RequestPendingAction(
+                                    PendingEditorAction::LoadScene,
+                                    entry.path().string()
+                                );
                             }
                         }
                     }
                 }
             }
+
+            ImGui::EndTable();
         }
 
         ImGui::End();
@@ -753,7 +1233,9 @@ namespace
 
     void RenderConsole()
     {
-        ImGui::Begin("Console");
+        ImGui::SetNextWindowPos(ImVec2(8, 452), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(280, 240), ImGuiCond_Once);
+        ImGui::Begin("Console", &g_editor.ShowConsole);
         if (ImGui::Button("Clear"))
         {
             g_editor.Console.clear();
@@ -796,7 +1278,9 @@ namespace
 
     void RenderBuildSettings()
     {
-        ImGui::Begin("Build Settings");
+        ImGui::SetNextWindowPos(ImVec2(964, 58), ImGuiCond_Once);
+        ImGui::SetNextWindowSize(ImVec2(360, 280), ImGuiCond_Once);
+        ImGui::Begin("Build Settings", &g_editor.ShowBuildSettings);
         ImGui::TextUnformatted("Scenes in Build");
         for (const std::string& scene : g_editor.BuildSettings.ScenesInBuild)
         {
@@ -896,13 +1380,17 @@ namespace
                 {
                     SaveScene();
                 }
+                if (ImGui::MenuItem("Close Project", nullptr, false, g_editor.HasProject))
+                {
+                    RequestPendingAction(PendingEditorAction::CloseProject);
+                }
                 if (ImGui::MenuItem("Stop Play Mode", nullptr, false, g_editor.Playing))
                 {
                     StopPlayMode();
                 }
                 if (ImGui::MenuItem("Exit"))
                 {
-                    PostQuitMessage(0);
+                    RequestPendingAction(PendingEditorAction::Exit);
                 }
                 ImGui::EndMenu();
             }
@@ -923,12 +1411,24 @@ namespace
             {
                 ImGui::EndMenu();
             }
+            if (ImGui::BeginMenu("Windows"))
+            {
+                ImGui::MenuItem("Project Browser", nullptr, &g_editor.ShowProjectBrowser);
+                ImGui::MenuItem("Hierarchy", nullptr, &g_editor.ShowHierarchy);
+                ImGui::MenuItem("Scene", nullptr, &g_editor.ShowScene);
+                ImGui::MenuItem("Game", nullptr, &g_editor.ShowGame);
+                ImGui::MenuItem("Inspector", nullptr, &g_editor.ShowInspector);
+                ImGui::MenuItem("Project", nullptr, &g_editor.ShowProject);
+                ImGui::MenuItem("Console", nullptr, &g_editor.ShowConsole);
+                ImGui::MenuItem("Build Settings", nullptr, &g_editor.ShowBuildSettings);
+                ImGui::EndMenu();
+            }
             if (ImGui::BeginMenu("Help"))
             {
                 ImGui::EndMenu();
             }
 
-            ImGui::SetCursorPosX(ImGui::GetWindowWidth() * 0.5f - 45.0f);
+            ImGui::SetCursorPosX(ImGui::GetWindowWidth() * 0.5f - 94.0f);
             if (!g_editor.Playing)
             {
                 if (ImGui::Button("Play"))
@@ -936,9 +1436,23 @@ namespace
                     StartPlayMode();
                 }
             }
-            else if (ImGui::Button("Stop"))
+            else
             {
-                StopPlayMode();
+                if (ImGui::Button(g_editor.Paused ? "Resume" : "Pause"))
+                {
+                    g_editor.Paused = !g_editor.Paused;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Step"))
+                {
+                    g_editor.StepRequested = true;
+                    g_editor.Paused = true;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Stop"))
+                {
+                    StopPlayMode();
+                }
             }
 
             ImGui::EndMainMenuBar();
@@ -962,10 +1476,79 @@ namespace
             g_editor.HasProject ? g_editor.Project.Name.c_str() : "No Project",
             g_editor.CurrentScenePath.empty() ? "No Scene" : ToRelativeScenePath(g_editor.CurrentScenePath).c_str(),
             g_editor.DirtyScene ? " *" : "",
-            g_editor.Playing ? "PLAY" : "EDIT",
+            g_editor.Playing
+                ? (g_editor.Paused ? "PAUSED" : "PLAY")
+                : "EDIT",
             Jevaing::Internal::BuildTargetToString(g_editor.BuildSettings.Target)
         );
         ImGui::End();
+    }
+
+    void RenderUnsavedChangesModal()
+    {
+        if (g_editor.RequestUnsavedPopup)
+        {
+            ImGui::OpenPopup("Unsaved Changes");
+            g_editor.RequestUnsavedPopup = false;
+        }
+
+        bool executeAction = false;
+        if (ImGui::BeginPopupModal(
+            "Unsaved Changes",
+            nullptr,
+            ImGuiWindowFlags_AlwaysAutoResize
+        ))
+        {
+            ImGui::TextUnformatted("The current scene has unsaved changes.");
+            ImGui::Separator();
+
+            if (ImGui::Button("Save"))
+            {
+                SaveScene();
+                if (!g_editor.DirtyScene)
+                {
+                    executeAction = true;
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+            ImGui::SameLine();
+
+            if (ImGui::Button("Discard"))
+            {
+                g_editor.DirtyScene = false;
+                executeAction = true;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+
+            if (ImGui::Button("Cancel"))
+            {
+                g_pendingAction = PendingEditorAction::None;
+                g_editor.PendingPath.clear();
+                ImGui::CloseCurrentPopup();
+            }
+
+            ImGui::EndPopup();
+        }
+
+        if (executeAction)
+        {
+            ExecutePendingAction();
+        }
+    }
+
+    void UpdatePlaySimulation(double deltaTime)
+    {
+        if (!g_editor.Playing)
+        {
+            return;
+        }
+
+        if (!g_editor.Paused || g_editor.StepRequested)
+        {
+            g_editor.PlayScene.Update(deltaTime);
+            g_editor.StepRequested = false;
+        }
     }
 
     void RenderEditor(double deltaTime)
@@ -973,21 +1556,52 @@ namespace
         RenderMainMenu();
 
         ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
+        RenderUnsavedChangesModal();
 
         if (!g_editor.HasProject)
         {
-            RenderProjectBrowser();
-            RenderConsole();
+            if (g_editor.ShowProjectBrowser)
+            {
+                RenderProjectBrowser();
+            }
+            if (g_editor.ShowConsole)
+            {
+                RenderConsole();
+            }
             RenderStatusBar();
             return;
         }
 
-        RenderHierarchy();
-        RenderSceneView(deltaTime);
-        RenderInspector();
-        RenderAssets();
-        RenderConsole();
-        RenderBuildSettings();
+        UpdatePlaySimulation(deltaTime);
+
+        if (g_editor.ShowHierarchy)
+        {
+            RenderHierarchy();
+        }
+        if (g_editor.ShowScene)
+        {
+            RenderSceneView();
+        }
+        if (g_editor.ShowGame)
+        {
+            RenderGameView();
+        }
+        if (g_editor.ShowInspector)
+        {
+            RenderInspector();
+        }
+        if (g_editor.ShowProject)
+        {
+            RenderProject();
+        }
+        if (g_editor.ShowConsole)
+        {
+            RenderConsole();
+        }
+        if (g_editor.ShowBuildSettings)
+        {
+            RenderBuildSettings();
+        }
         RenderStatusBar();
     }
 
@@ -1028,6 +1642,7 @@ namespace
                 wc.hInstance,
                 nullptr
             );
+        g_hwnd = hwnd;
 
         if (!CreateDeviceD3D(hwnd))
         {
@@ -1090,7 +1705,11 @@ namespace
         ImGui::DestroyContext();
 
         CleanupDeviceD3D();
-        DestroyWindow(hwnd);
+        if (g_hwnd)
+        {
+            DestroyWindow(hwnd);
+            g_hwnd = nullptr;
+        }
         UnregisterClassW(wc.lpszClassName, wc.hInstance);
         return 0;
     }
@@ -1099,7 +1718,8 @@ namespace
     {
         Jevaing::Internal::Logger::Info("Editor enabled");
         Jevaing::Internal::Logger::Info(std::string("ImGui version: ") + IMGUI_VERSION);
-        Jevaing::Internal::Logger::Info("Panels: Project Browser, Hierarchy, Scene View, Inspector, Project/Assets, Console, Build Settings");
+        Jevaing::Internal::Logger::Info("Panels: Project Browser, Hierarchy, Scene, Game, Inspector, Project, Console, Build Settings");
+        Jevaing::Internal::Logger::Info("Editor controls: Play, Pause, Step, Stop, Windows menu, mouse Scene editing, unsaved-change prompt");
         for (const Jevaing::Internal::BuildTargetInfo& target : Jevaing::Internal::GetBuildTargetInfo())
         {
             Jevaing::Internal::Logger::Info(

@@ -13,8 +13,8 @@ Jevaing is an experimental open-source graphics and game engine written in C++17
 Jevaing 0.0.11 introduces the first usable editor/tooling pass plus build-target foundations:
 
 - `JevaingEditor.exe` as a separate executable.
-- Dear ImGui docking UI for Project Browser, Hierarchy, Scene View, Inspector, Project/Assets, Console and Build Settings.
-- Project creation from a portable CMake template.
+- Dear ImGui docking UI for Project Browser, Hierarchy, Scene, Game, Inspector, Project, Console and Build Settings.
+- Project creation from a portable C/C++ CMake template.
 - Scene save/load through the existing runtime `Scene` format.
 - Edit Mode / Play Mode separation with snapshot restore.
 - Windows Desktop x64 build target that creates an external game executable.
@@ -48,10 +48,12 @@ The editor currently provides:
 - Scene View: MVP editor-rendered grid/bounds preview.
 - Project/Assets: scans assets/scenes.
 - Console: receives `Logger` events through an internal sink while stdout/stderr still work.
-- Play/Stop: runs a runtime scene snapshot and restores edit state on Stop.
+- Play/Pause/Step/Stop: runs a runtime scene snapshot and restores edit state on Stop.
+- Windows menu: show/hide editor panels from the top menu bar.
+- Unsaved scene warning before closing the editor, closing a project or loading another project/scene.
 - Build Settings: Windows Desktop x64 build and target availability display.
 
-Known editor limitation: Scene View is not yet the final D3D11 offscreen runtime render target. It is an MVP editor view for selection/spatial feedback.
+Known editor limitation: Scene/Game are not yet final D3D11 offscreen runtime render targets. They are MVP editor previews for selection, camera framing and spatial feedback.
 
 ## Project Template
 
@@ -66,11 +68,13 @@ MyGame/
 |-- Scenes/
 |   `-- main.scene
 |-- Source/
-|   `-- Game.cpp
+|   |-- Game.cpp
+|   |-- GameCode.c
+|   `-- GameCode.h
 `-- CMakeLists.txt
 ```
 
-The generated `CMakeLists.txt` is portable and expects `JEVAING_ENGINE_ROOT` at configure/build time. It does not store personal absolute paths.
+The generated `CMakeLists.txt` is portable and expects `JEVAING_ENGINE_ROOT` at configure/build time. It does not store personal absolute paths. It compiles `Source/*.cpp` and `Source/*.c`, so projects can mix C++ gameplay entry code with C helper modules.
 
 ## Build Targets
 
