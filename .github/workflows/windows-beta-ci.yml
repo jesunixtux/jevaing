@@ -1,0 +1,41 @@
+name: Windows beta build and smoke tests
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure engine and editor
+        run: cmake -S . -B build -DJEVAING_BUILD_EDITOR=ON -DJEVAING_BUILD_XBOX_SMOKE_TEST=OFF
+      - name: Compile engine, editor and sandbox
+        run: cmake --build build --config Debug --target JevaingSandbox JevaingEditor
+      - name: Run headless engine tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tests = @(
+            "--self-test",
+            "--project-template-test",
+            "--editor-scene-roundtrip-test",
+            "--playmode-restore-test",
+            "--physics-info",
+            "--physics-2d-test",
+            "--physics-3d-test",
+            "--xbox-build-environment-test"
+          )
+          foreach ($test in $tests) {
+            & .\bin\Debug\JevaingSandbox.exe $test
+            if ($LASTEXITCODE -ne 0) { throw "FAILED: $test" }
+          }
+          & .\bin\Debug\JevaingEditor.exe --editor-info
+          if ($LASTEXITCODE -ne 0) { throw "Editor info smoke failed" }
+      - name: Verify generated game build
+        shell: pwsh
+        run: |
+          & .\bin\Debug\JevaingSandbox.exe --windows-build-test
+          if ($LASTEXITCODE -ne 0) { throw "Windows game export test failed" }

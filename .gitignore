@@ -1,21 +1,37 @@
-.vs/
-build/
-build-minimal3d/
-build-physics3d/
-build-physics2d/
-build-nophysics/
-build-runtime/
-build-xbox-smoke-uwp/
-out/
+# Root-only build products. Do not ignore Engine/Build source files.
+/.vs/
+/build/
+/build-minimal3d/
+/build-physics3d/
+/build-physics2d/
+/build-nophysics/
+/build-runtime/
+/build-xbox-smoke/
+/build-xbox-smoke-uwp/
+/out/
+/bin/Debug/
+/bin/Release/
 
-Samples/Minimal3D/Assets/Models/gummybear.fbx
+# Generated game project builds (any depth).
+**/.jevaing-build/
+**/CMakeFiles/
+**/CMakeCache.txt
+**/cmake_install.cmake
+**/Makefile
 
-bin/Debug/
-bin/Release/
-
+# Local configuration, credentials and IDE metadata.
 *.user
 *.suo
 *.VC.db
 *.VC.opendb
 CMakePresets.json.user
 JevaingEditor.ini
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.key
+
+# Locally generated sample assets.
+Samples/Minimal3D/Assets/Models/gummybear.fbx
