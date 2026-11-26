@@ -964,13 +964,32 @@ namespace Jevaing
         std::string& error
     )
     {
+        if (LoadFromFileSingle(path, assetRoot, scene, error)) return true;
+
+        const std::string primaryError = error;
+        const std::filesystem::path backup(path + ".bak");
+        std::error_code ec;
+        if (std::filesystem::is_symlink(backup, ec) || ec ||
+            !std::filesystem::is_regular_file(backup, ec))
+        {
+            error = primaryError;
+            return false;
+        }
+
+        if (LoadFromFileSingle(backup.string(), assetRoot, scene, error)) return true;
+        error = primaryError + " Backup recovery failed: " + error;
+        return false;
+    }
+
+    bool Scene::LoadFromFileSingle(
+        const std::string& path,
+        const std::string& assetRoot,
+        Scene& scene,
+        std::string& error
+    )
+    {
         error.clear();
         std::ifstream file(path);
-        if (!file && std::filesystem::exists(path + ".bak"))
-        {
-            file.clear();
-            file.open(path + ".bak");
-        }
 
         if (!file)
         {

@@ -42,5 +42,9 @@ namespace Jevaing
         );
 
         static std::string ResolveStartupScenePath(const ProjectConfig& config);
+
+    private:
+        static bool LoadSingle(const std::string& path, ProjectConfig& config,
+            std::string& error);
     };
 }

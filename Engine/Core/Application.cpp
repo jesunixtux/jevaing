@@ -347,8 +347,15 @@ namespace Jevaing::Internal
 
             if (scene.Save(scenePath.string(), error))
             {
-                std::filesystem::remove(scenePath, removeError);
+                {
+                    std::ofstream damaged(scenePath, std::ios::trunc);
+                    damaged << "invalid scene data\n";
+                }
                 Scene recovered;
+                success &= ReportTest(Scene::LoadFromFile(scenePath.string(), ".", recovered, error) &&
+                    recovered.FindEntity(20) != nullptr,
+                    "Scene loads backup when the main file is corrupt");
+                std::filesystem::remove(scenePath, removeError);
                 success &= ReportTest(Scene::LoadFromFile(scenePath.string(), ".", recovered, error) &&
                     recovered.FindEntity(20) != nullptr,
                     "Scene loads backup after interrupted replacement");
@@ -1046,8 +1053,15 @@ namespace Jevaing::Internal
                 "Project save creates a recoverable backup");
             if (savedSecond)
             {
-                std::filesystem::remove(safetyFile);
+                {
+                    std::ofstream damaged(safetyFile, std::ios::trunc);
+                    damaged << "invalid project data\n";
+                }
                 ProjectConfig recovered;
+                success &= ReportTest(Project::Load(safetyFile.string(), recovered, saveError) &&
+                    recovered.Name == safeProject.Name,
+                    "Project loads backup when the main file is corrupt");
+                std::filesystem::remove(safetyFile);
                 success &= ReportTest(Project::Load(safetyFile.string(), recovered, saveError) &&
                     recovered.Name == safeProject.Name,
                     "Project loads backup after interrupted replacement");

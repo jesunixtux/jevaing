@@ -149,15 +149,32 @@ namespace Jevaing
         std::string& error
     )
     {
+        if (LoadSingle(path, config, error)) return true;
+
+        const std::string primaryError = error;
+        const fs::path backup(path + ".bak");
+        std::error_code ec;
+        if (fs::is_symlink(backup, ec) || ec || !fs::is_regular_file(backup, ec))
+        {
+            error = primaryError;
+            return false;
+        }
+
+        if (LoadSingle(backup.string(), config, error)) return true;
+        error = primaryError + " Backup recovery failed: " + error;
+        return false;
+    }
+
+    bool Project::LoadSingle(
+        const std::string& path,
+        ProjectConfig& config,
+        std::string& error
+    )
+    {
         config = {};
         error.clear();
 
         std::ifstream file(path);
-        if (!file && fs::exists(path + ".bak"))
-        {
-            file.clear();
-            file.open(path + ".bak");
-        }
 
         if (!file)
         {

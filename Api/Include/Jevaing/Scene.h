@@ -86,6 +86,8 @@ namespace Jevaing
         const std::vector<CollisionEvent3D>& GetTriggerEvents3D() const;
 
     private:
+        static bool LoadFromFileSingle(const std::string& path,
+            const std::string& assetRoot, Scene& scene, std::string& error);
         EntityId AllocateEntityId();
         bool WouldCreateCycle(EntityId child, EntityId parent) const;
         void RemoveChildLink(EntityId parent, EntityId child);
