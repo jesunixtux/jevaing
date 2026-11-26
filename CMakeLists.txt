@@ -10,6 +10,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(JEVAING_BUILD_C_SAMPLE "Build pure C game and ABI test." OFF)
 option(JEVAING_BUILD_SANDBOX "Build the Jevaing Sandbox executable." ON)
 option(JEVAING_BUILD_EDITOR "Build the Jevaing first-party editor." ON)
 option(JEVAING_BUILD_XBOX_SMOKE_TEST "Build the experimental Xbox smoke test sample." ON)
@@ -135,6 +136,7 @@ add_subdirectory(Api)
 add_library(JevaingEngine STATIC
     Engine/Build/BuildSystem.cpp
     Engine/Core/AssetManager.cpp
+    Engine/Core/JevaingC.cpp
     Engine/Core/Application.cpp
     Engine/Core/CommandLine.cpp
     Engine/Core/Input.cpp
@@ -297,4 +299,13 @@ else()
             -Wpedantic
         )
     endif()
+endif()
+
+if(JEVAING_BUILD_C_SAMPLE)
+    add_executable(JevaingCSample Samples/MinimalC/main.c)
+    target_compile_features(JevaingCSample PRIVATE c_std_11)
+    set_target_properties(JevaingCSample PROPERTIES LINKER_LANGUAGE CXX
+        RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_CURRENT_BINARY_DIR}/bin/Debug"
+        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_BINARY_DIR}/bin/Release")
+    target_link_libraries(JevaingCSample PRIVATE JevaingEngine)
 endif()
