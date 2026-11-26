@@ -7,4 +7,6 @@ Executed successfully in both Debug and Release: `--self-test`, `--project-templ
 The pure C sample additionally passed ABI validation, scene save/load roundtrip and two-frame game lifecycle in Debug and Release after the scene/entity ABI extension.
 Its 2D/3D box physics and PNG loading tests also passed in both configurations. The runtime test draws a checker texture through the C sprite API using the null renderer, so visual pixels were not inspected.
 
+With `JEVAING_ENABLE_NATIVE_MODULES=ON`, `JevaingModuleSmokeTest` passed in Debug and Release. It loads two C DLLs through versioned manifests, verifies dependency and lifecycle order, resolves a host service, and rejects incompatible ABI, path traversal and cyclic dependencies. Native module code was not sandboxed.
+
 Still unverified: clean-machine runtime dependencies, GUI interaction, real game code in editor Play, Linux/macOS, optional modules/mods/audio/recovery. CI now requests Debug and Release but its result must be observed before claiming a remote pass.

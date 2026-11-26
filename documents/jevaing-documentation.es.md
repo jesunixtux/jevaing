@@ -418,3 +418,5 @@ Al agregar soporte de plataforma, preferir smoke tests pequenos antes de portar 
 # Actualización del 25-11-2026
 
 Los nombres y rutas de proyectos se validan; el guardado de proyectos y escenas usa archivo temporal y copia `.bak`. La exportación Windows exige confiar explícitamente en los scripts CMake del proyecto y prepara las escenas seleccionadas. El editor sigue reproduciendo una copia de la escena: aún no ejecuta el código real del juego en Play. La ABI C v1 continúa experimental. Véase `TESTING.md` para pruebas ejecutadas y limitaciones.
+
+La ABI C experimental ahora incluye escenas, entidades, física básica de cajas y texturas. Un cargador nativo opcional para Windows admite interfaces C versionadas, manifiestos con dependencias y servicios del host. Ninguna de estas funciones constituye todavía un SDK o sistema de mods completo.

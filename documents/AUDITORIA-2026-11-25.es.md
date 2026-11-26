@@ -31,4 +31,4 @@ API C v1 experimental, muestra C11 pura y prueba de ABI en CI. Se conserva C++17
 - P1 parcialmente mitigado: el test de exportación ejecuta dos frames del juego generado. Falta validación en Windows limpio sin código fuente ni herramientas de desarrollo.
 - P1 pendiente: Play del editor todavía no ejecuta el código real del juego.
 - P2 en progreso: Debug y Release compilaron y pasaron las pruebas locales, incluida la exportación de juego con arranque de dos frames; CI solicita ambas configuraciones y sus resultados remotos aún deben comprobarse. La ABI C v1 continúa experimental.
-- Módulos dinámicos, mods, Lua, audio y recuperación cifrada siguen pendientes.
+- El cargador nativo experimental de Windows ahora admite manifiestos, dependencias y servicios versionados y pasó pruebas locales; integración en editor y SDK instalable siguen pendientes. Mods, Lua, audio y recuperación cifrada siguen pendientes.

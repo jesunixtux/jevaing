@@ -10,5 +10,6 @@
 - Run Windows CI checks for Debug and Release configurations.
 - Extend experimental C ABI v1 with opaque scene ownership, entity IDs, hierarchy, transforms and scene save/load; test from C11 in both configurations.
 - Add basic 2D/3D box physics and texture/sprite resource handles to the C ABI, with pure C tests in Debug and Release.
+- Add an opt-in Windows native module loader with versioned C interfaces, dependency manifests, a service lookup table and DLL lifecycle tests.
 
 No version change. See `documents/TESTING.md` for actual local results and remaining limits.
