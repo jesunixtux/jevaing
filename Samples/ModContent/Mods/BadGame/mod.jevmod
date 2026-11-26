@@ -1,0 +1,5 @@
+name=BadGame
+version=1.0.0
+game=OtherGame
+gameMajor=1
+contentRoot=Content

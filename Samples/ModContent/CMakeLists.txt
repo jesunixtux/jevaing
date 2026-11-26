@@ -1,0 +1,3 @@
+add_executable(JevaingModContentTest ModContentTest.cpp)
+target_link_libraries(JevaingModContentTest PRIVATE JevaingMods)
+target_compile_features(JevaingModContentTest PRIVATE cxx_std_17)

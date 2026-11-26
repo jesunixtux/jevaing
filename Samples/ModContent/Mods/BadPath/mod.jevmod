@@ -1,0 +1,5 @@
+name=BadPath
+version=1.0.0
+game=SampleGame
+gameMajor=1
+contentRoot=../outside

@@ -1,0 +1,6 @@
+name=Example
+version=1.2.0
+game=SampleGame
+gameMajor=1
+contentRoot=Content
+dependency=Core@1

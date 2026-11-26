@@ -1,0 +1,6 @@
+name=CycleB
+version=1.0.0
+game=SampleGame
+gameMajor=1
+contentRoot=Content
+dependency=CycleA@1
