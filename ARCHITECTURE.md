@@ -5,7 +5,7 @@ Status: current implementation, 2026-11-25. Jevaing remains an early prototype.
 | Area | Current code | Status |
 | --- | --- | --- |
 | Public C++ API | `Api/Include/Jevaing` | Implemented, C++17 |
-| C ABI | `JevaingC.h`, `JevaingC.cpp` | Experimental v1; lifecycle, input, basic drawing only |
+| C ABI | `JevaingC.h`, `JevaingC.cpp` | Experimental v1; lifecycle, input, drawing, basic scenes/entities |
 | Core and runtime | `Engine/Core` | Implemented in one static library |
 | Rendering | `Engine/Renderer`, DirectX 11 | Windows only; null renderer for tests |
 | Physics | `Engine/Physics` | Box2D and Jolt optional CMake features |

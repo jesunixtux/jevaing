@@ -46,6 +46,11 @@ jobs:
         run: |
           & .\build\bin\${{ matrix.configuration }}\JevaingCSample.exe --abi-test
           if ($LASTEXITCODE -ne 0) { throw "C ABI test failed" }
+          $scenePath = Join-Path $env:RUNNER_TEMP ("jevaing-c-" + [guid]::NewGuid().ToString("N") + ".scene")
+          & .\build\bin\${{ matrix.configuration }}\JevaingCSample.exe --scene-roundtrip-test $scenePath
+          if ($LASTEXITCODE -ne 0) { throw "C scene roundtrip failed" }
+          & .\build\bin\${{ matrix.configuration }}\JevaingCSample.exe --runtime-test --renderer null --frames 2
+          if ($LASTEXITCODE -ne 0) { throw "C game lifecycle failed" }
       - name: Verify generated game build
         shell: pwsh
         run: |
