@@ -7,6 +7,8 @@ Status: early prototype, not production ready
 
 The experimental C ABI now covers basic scenes, entities, box physics and textures. An optional Windows native module loader supports versioned C interfaces, dependency manifests and host services. Neither feature is a complete SDK or mod system.
 
+An optional content-only mod resolver can mount compatible asset/map packages without changing base files. Games must opt in and call the resolver; Lua/native mod execution is pending.
+
 ## 1. Overview
 
 Jevaing is an experimental C++17 game engine built with CMake. Its current focus is to provide a small but usable foundation for standalone games, engine samples, editor tooling, 2D/3D rendering, physics, and early platform target preparation.

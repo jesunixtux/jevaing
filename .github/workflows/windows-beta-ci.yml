@@ -17,9 +17,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Configure engine and editor
-        run: cmake -S . -B build -DJEVAING_BUILD_C_SAMPLE=ON -DJEVAING_BUILD_EDITOR=ON -DJEVAING_BUILD_XBOX_SMOKE_TEST=OFF -DJEVAING_ENABLE_NATIVE_MODULES=ON
+        run: cmake -S . -B build -DJEVAING_BUILD_C_SAMPLE=ON -DJEVAING_BUILD_EDITOR=ON -DJEVAING_BUILD_XBOX_SMOKE_TEST=OFF -DJEVAING_ENABLE_NATIVE_MODULES=ON -DJEVAING_ENABLE_MODS=ON
       - name: Compile engine, editor and sandbox
-        run: cmake --build build --config ${{ matrix.configuration }} --target JevaingSandbox JevaingEditor JevaingCSample JevaingModuleSmokeTest
+        run: cmake --build build --config ${{ matrix.configuration }} --target JevaingSandbox JevaingEditor JevaingCSample JevaingModuleSmokeTest JevaingModContentTest
       - name: Run headless engine tests
         shell: pwsh
         run: |
@@ -66,3 +66,8 @@ jobs:
           $moduleDir = ".\build\Samples\NativeModule\bin\${{ matrix.configuration }}"
           & "$moduleDir\JevaingModuleSmokeTest.exe" "$moduleDir\SmokeModule.jevmod"
           if ($LASTEXITCODE -ne 0) { throw "Native module test failed" }
+      - name: Verify optional content mods
+        shell: pwsh
+        run: |
+          & ".\build\Samples\ModContent\${{ matrix.configuration }}\JevaingModContentTest.exe" ".\Samples\ModContent"
+          if ($LASTEXITCODE -ne 0) { throw "Mod content test failed" }

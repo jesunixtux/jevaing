@@ -9,4 +9,6 @@ Its 2D/3D box physics and PNG loading tests also passed in both configurations. 
 
 With `JEVAING_ENABLE_NATIVE_MODULES=ON`, `JevaingModuleSmokeTest` passed in Debug and Release. It loads two C DLLs through versioned manifests, verifies dependency and lifecycle order, resolves a host service, and rejects incompatible ABI, path traversal and cyclic dependencies. Native module code was not sandboxed.
 
+With `JEVAING_ENABLE_MODS=ON`, `JevaingModContentTest` passed in Debug and Release. It checks default disabled policy, game/version and dependency compatibility, path rejection, asset/map lookup, optional overrides and preservation of original files. The resolver is not yet wired into ordinary game asset loading.
+
 Still unverified: clean-machine runtime dependencies, GUI interaction, real game code in editor Play, Linux/macOS, optional modules/mods/audio/recovery. CI now requests Debug and Release but its result must be observed before claiming a remote pass.

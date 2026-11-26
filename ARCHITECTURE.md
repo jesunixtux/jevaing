@@ -12,8 +12,9 @@ Status: current implementation, 2026-11-25. Jevaing remains an early prototype.
 | Editor | `Editor/Application` | Windows ImGui prototype; scene copy during Play |
 | Build tooling | `Engine/Build` | Windows project build/export; requires trusted CMake scripts |
 | Native modules | `Engine/Modules`, `JevaingModule.h` | Experimental Windows-only opt-in loader |
-| Audio, scripting, mods | — | Pending |
+| Content mods | `Engine/Mods`, `ModContent.h` | Experimental opt-in asset/map resolver |
+| Audio, scripting | — | Pending |
 
-`JevaingEngine` currently combines runtime, renderer, physics, assets and build tooling. `JevaingModules` is a separate optional static library with a versioned C plugin interface. Split the remaining engine libraries only as working interfaces and tests are added. Proprietary SDKs belong in external adapters, never in this repository.
+`JevaingEngine` currently combines runtime, renderer, physics, assets and build tooling. `JevaingModules` is a separate optional static library with a versioned C plugin interface. `JevaingMods` is a separate optional content resolver; games must opt in and call it for assets or maps. Split the remaining engine libraries only as working interfaces and tests are added. Proprietary SDKs belong in external adapters, never in this repository.
 
 Exported games use the generated CMake project and the engine source at **build time**. The executable does not require the editor or engine source at runtime; portability to a clean Windows machine still requires validation, including runtime dependencies.

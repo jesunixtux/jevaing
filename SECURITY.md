@@ -6,4 +6,6 @@ Jevaing projects can contain CMake and C/C++ code. Building an untrusted project
 
 Project metadata and scene asset paths are confined to their respective roots during loading and export. Project and scene saves use sibling temporary files and a `.bak` copy. This is recovery from interrupted replacement, not a substitute for version control or durable filesystem synchronization. A corrupt existing file is not automatically repaired from backup.
 
+The optional content mod resolver checks package compatibility and confines resolved files to their content roots. It returns paths to files in mounted packages; it does not overwrite base files. Games must explicitly opt in to assets, maps and override behavior. This resolver does not execute scripts or native plugins and is not a sandbox for code that a game loads separately.
+
 Do not commit private SDKs, credentials or signing keys. Encrypted source recovery is pending; no private key should be embedded in a game executable.

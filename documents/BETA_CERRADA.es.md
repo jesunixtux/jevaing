@@ -10,7 +10,7 @@
 - Física 2D (Box2D), física 3D (Jolt), importación básica de modelos y texturas.
 - Código de juegos en C++17 y módulos auxiliares en C.
 
-No se anuncia como compatible con Xbox comercial, macOS, Linux, Vulkan, Metal, Lua, mods, plugins nativos, recuperación cifrada de fuentes ni servicios externos. Esas funciones siguen en el plan, no en la beta actual.
+No se anuncia como compatible con Xbox comercial, macOS, Linux, Vulkan, Metal, Lua, mods completos, recuperación cifrada de fuentes ni servicios externos. El montaje de contenido y el cargador nativo son experimentales y quedan fuera del alcance de esta beta.
 
 ## Cambios para recuperar una compilación reproducible
 
@@ -37,7 +37,7 @@ No se anuncia como compatible con Xbox comercial, macOS, Linux, Vulkan, Metal, L
 
 1. Runtime Lua con API de escenas, entidades y eventos, con controles de acceso.
 2. Ampliar la API C v1 experimental a escenas, entidades, física y recursos; comprobar su ABI por plataforma.
-3. Mods como función opcional: **apagada por defecto** y excluida de la compilación si no se usa.
+3. Integrar y ampliar el montaje de contenido de mods opcional: **apagado por defecto** y excluido de la compilación si no se usa.
 4. Adaptadores para SDK/API externas, también opcionales; los SDK propietarios nunca se almacenan en el repositorio público.
 5. Paquetes de contenido y sistema de recuperación cifrada de proyectos como funciones opt-in separadas.
 6. Mejoras del editor y audio/animaciones antes de juegos completos.

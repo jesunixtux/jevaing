@@ -2,7 +2,7 @@
 
 Jevaing is an experimental open-source graphics and game engine written in C++17 and built with CMake.
 
-The C11 ABI is experimental; it includes scenes, entities, basic box physics, texture loading and sprite drawing. Windows desktop is the only graphical platform currently implemented. An optional Windows native module loader is experimental. The editor's Play Mode simulates a copy of the scene; it does not run the project's compiled game code. Lua, audio, mods, prefabs and encrypted project recovery are pending.
+The C11 ABI is experimental; it includes scenes, entities, basic box physics, texture loading and sprite drawing. Windows desktop is the only graphical platform currently implemented. Optional native modules and content-only mod mounts are experimental. The editor's Play Mode simulates a copy of the scene; it does not run the project's compiled game code. Lua, audio, native mod execution, prefabs and encrypted project recovery are pending.
 
 See [architecture](ARCHITECTURE.md), [roadmap](ROADMAP.md), [build guide](documents/BUILD.md), [C API](documents/C-API.md), [editor](documents/EDITOR.md) and [test status](documents/TESTING.md) for the current implementation and limits.
 
