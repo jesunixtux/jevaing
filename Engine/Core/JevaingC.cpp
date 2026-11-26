@@ -1,9 +1,17 @@
 #include <Jevaing/JevaingC.h>
 #include <Jevaing/Jevaing.h>
 #include <atomic>
+#include <cmath>
+#include <memory>
+#include <utility>
 struct jevaing_scene {
     Jevaing::Scene value;
     explicit jevaing_scene(const char* name) : value(name) {}
+};
+struct jevaing_texture {
+    std::shared_ptr<const Jevaing::Texture2D> value;
+    explicit jevaing_texture(std::shared_ptr<const Jevaing::Texture2D> texture)
+        : value(std::move(texture)) {}
 };
 namespace {
     std::atomic_flag running = ATOMIC_FLAG_INIT;
@@ -19,6 +27,14 @@ namespace {
     };
     Jevaing::Color color(jevaing_color c) { return {c.r,c.g,c.b,c.a}; }
     Jevaing::Vec3 vec(jevaing_vec3 v) { return {v.x,v.y,v.z}; }
+    bool body_type(int32_t value, Jevaing::BodyType& out) {
+        switch (value) {
+            case JEVAING_BODY_STATIC: out=Jevaing::BodyType::Static; return true;
+            case JEVAING_BODY_KINEMATIC: out=Jevaing::BodyType::Kinematic; return true;
+            case JEVAING_BODY_DYNAMIC: out=Jevaing::BodyType::Dynamic; return true;
+            default: return false;
+        }
+    }
     class CGame final : public Jevaing::Game {
         jevaing_game_desc d;
     public:
@@ -78,6 +94,54 @@ extern "C" int32_t jevaing_draw_cube(jevaing_transform t,jevaing_color c) {
     if(!g3) return JEVAING_C_INVALID_STATE;
     try { Jevaing::Transform x; x.Position=vec(t.position); x.Rotation=vec(t.rotation); x.Scale=vec(t.scale);
         g3->DrawCube(x,color(c)); return JEVAING_C_OK; } catch(...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_texture_load(const char* path, jevaing_texture** out) {
+    if (!path || !*path || !out) return JEVAING_C_INVALID_ARGUMENT;
+    *out=nullptr;
+    try {
+        auto texture=Jevaing::Assets::LoadTexture2D(path);
+        if (!texture) return JEVAING_C_IO_ERROR;
+        *out=new jevaing_texture(std::move(texture));
+        return JEVAING_C_OK;
+    } catch (...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_texture_create_checker(int32_t width, int32_t height,
+    int32_t cell_size, jevaing_texture** out) {
+    if (!out || width<=0 || height<=0 || cell_size<=0) return JEVAING_C_INVALID_ARGUMENT;
+    *out=nullptr;
+    try {
+        auto texture=Jevaing::Assets::CreateCheckerTexture(width,height,cell_size);
+        if (!texture) return JEVAING_C_INTERNAL_ERROR;
+        *out=new jevaing_texture(std::move(texture));
+        return JEVAING_C_OK;
+    } catch (...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_texture_get_size(const jevaing_texture* texture,
+    int32_t* width, int32_t* height) {
+    if (!texture || !width || !height) return JEVAING_C_INVALID_ARGUMENT;
+    *width=texture->value->Width;
+    *height=texture->value->Height;
+    return JEVAING_C_OK;
+}
+
+extern "C" int32_t jevaing_texture_destroy(jevaing_texture* texture) {
+    if (!texture) return JEVAING_C_INVALID_ARGUMENT;
+    try { delete texture; return JEVAING_C_OK; }
+    catch (...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_draw_sprite(const jevaing_texture* texture,
+    jevaing_vec2 center, jevaing_vec2 size, jevaing_color tint) {
+    if (!g2) return JEVAING_C_INVALID_STATE;
+    if (!texture || !std::isfinite(size.x) || !std::isfinite(size.y) ||
+        size.x<=0 || size.y<=0) return JEVAING_C_INVALID_ARGUMENT;
+    try {
+        g2->DrawSprite(texture->value,{center.x,center.y},{size.x,size.y},color(tint));
+        return JEVAING_C_OK;
+    } catch (...) { return JEVAING_C_INTERNAL_ERROR; }
 }
 
 extern "C" int32_t jevaing_scene_create(const char* name, jevaing_scene** out_scene) {
@@ -166,5 +230,110 @@ extern "C" int32_t jevaing_scene_entity_set_transform(jevaing_scene* scene,
         t.Rotation = vec(transform->rotation);
         t.Scale = vec(transform->scale);
         return JEVAING_C_OK;
+    } catch (...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_scene_entity_set_body2d(jevaing_scene* scene,
+    jevaing_entity_id id, int32_t type) {
+    Jevaing::BodyType parsed;
+    if (!scene || !id || !body_type(type, parsed)) return JEVAING_C_INVALID_ARGUMENT;
+    try {
+        auto* entity=scene->value.FindEntity(id);
+        if (!entity) return JEVAING_C_NOT_FOUND;
+        entity->RigidBody2D=Jevaing::RigidBody2DComponent{};
+        entity->RigidBody2D->Type=parsed;
+        return JEVAING_C_OK;
+    } catch (...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_scene_entity_set_box2d(jevaing_scene* scene,
+    jevaing_entity_id id, jevaing_vec2 size) {
+    if (!scene || !id || !std::isfinite(size.x) || !std::isfinite(size.y) ||
+        size.x<=0 || size.y<=0) return JEVAING_C_INVALID_ARGUMENT;
+    try {
+        auto* entity=scene->value.FindEntity(id);
+        if (!entity) return JEVAING_C_NOT_FOUND;
+        entity->BoxCollider2D=Jevaing::BoxCollider2DComponent{};
+        entity->BoxCollider2D->Size={size.x,size.y};
+        return JEVAING_C_OK;
+    } catch (...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_scene_entity_set_body3d(jevaing_scene* scene,
+    jevaing_entity_id id, int32_t type) {
+    Jevaing::BodyType parsed;
+    if (!scene || !id || !body_type(type, parsed)) return JEVAING_C_INVALID_ARGUMENT;
+    try {
+        auto* entity=scene->value.FindEntity(id);
+        if (!entity) return JEVAING_C_NOT_FOUND;
+        entity->RigidBody3D=Jevaing::RigidBody3DComponent{};
+        entity->RigidBody3D->Type=parsed;
+        return JEVAING_C_OK;
+    } catch (...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_scene_entity_set_box3d(jevaing_scene* scene,
+    jevaing_entity_id id, jevaing_vec3 size) {
+    if (!scene || !id || !std::isfinite(size.x) || !std::isfinite(size.y) ||
+        !std::isfinite(size.z) || size.x<=0 || size.y<=0 || size.z<=0)
+        return JEVAING_C_INVALID_ARGUMENT;
+    try {
+        auto* entity=scene->value.FindEntity(id);
+        if (!entity) return JEVAING_C_NOT_FOUND;
+        entity->BoxCollider3D=Jevaing::BoxCollider3DComponent{};
+        entity->BoxCollider3D->Size={size.x,size.y,size.z};
+        return JEVAING_C_OK;
+    } catch (...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_scene_update(jevaing_scene* scene, double dt) {
+    if (!scene || !std::isfinite(dt) || dt<0) return JEVAING_C_INVALID_ARGUMENT;
+    try { scene->value.Update(dt); return JEVAING_C_OK; }
+    catch (...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_scene_body2d_set_velocity(jevaing_scene* scene,
+    jevaing_entity_id id, jevaing_vec2 velocity) {
+    if (!scene || !id || !std::isfinite(velocity.x) || !std::isfinite(velocity.y))
+        return JEVAING_C_INVALID_ARGUMENT;
+    try {
+        auto& world=scene->value.Physics2D();
+        if (!world.IsAvailable() || !world.HasBody(id)) return JEVAING_C_INVALID_STATE;
+        world.SetLinearVelocity(id,{velocity.x,velocity.y});
+        return JEVAING_C_OK;
+    } catch (...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_scene_body2d_get_velocity(const jevaing_scene* scene,
+    jevaing_entity_id id, jevaing_vec2* out) {
+    if (!scene || !id || !out) return JEVAING_C_INVALID_ARGUMENT;
+    try {
+        const auto& world=scene->value.Physics2D();
+        if (!world.IsAvailable() || !world.HasBody(id)) return JEVAING_C_INVALID_STATE;
+        const auto value=world.GetLinearVelocity(id);
+        *out={value.X,value.Y}; return JEVAING_C_OK;
+    } catch (...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_scene_body3d_set_velocity(jevaing_scene* scene,
+    jevaing_entity_id id, jevaing_vec3 velocity) {
+    if (!scene || !id || !std::isfinite(velocity.x) || !std::isfinite(velocity.y) ||
+        !std::isfinite(velocity.z)) return JEVAING_C_INVALID_ARGUMENT;
+    try {
+        auto& world=scene->value.Physics3D();
+        if (!world.IsAvailable() || !world.HasBody(id)) return JEVAING_C_INVALID_STATE;
+        world.SetLinearVelocity(id,vec(velocity));
+        return JEVAING_C_OK;
+    } catch (...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_scene_body3d_get_velocity(const jevaing_scene* scene,
+    jevaing_entity_id id, jevaing_vec3* out) {
+    if (!scene || !id || !out) return JEVAING_C_INVALID_ARGUMENT;
+    try {
+        const auto& world=scene->value.Physics3D();
+        if (!world.IsAvailable() || !world.HasBody(id)) return JEVAING_C_INVALID_STATE;
+        const auto value=world.GetLinearVelocity(id);
+        *out={value.X,value.Y,value.Z}; return JEVAING_C_OK;
     } catch (...) { return JEVAING_C_INTERNAL_ERROR; }
 }

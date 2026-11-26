@@ -16,8 +16,10 @@ typedef struct jevaing_vec3 { float x, y, z; } jevaing_vec3;
 typedef struct jevaing_color { float r, g, b, a; } jevaing_color;
 typedef struct jevaing_transform { jevaing_vec3 position, rotation, scale; } jevaing_transform;
 typedef struct jevaing_scene jevaing_scene;
+typedef struct jevaing_texture jevaing_texture;
 typedef uint64_t jevaing_entity_id;
 #define JEVAING_INVALID_ENTITY_ID UINT64_C(0)
+enum { JEVAING_BODY_STATIC=0, JEVAING_BODY_KINEMATIC=1, JEVAING_BODY_DYNAMIC=2 };
 typedef int32_t jevaing_key;
 enum {
     JEVAING_KEY_W=1, JEVAING_KEY_A=2, JEVAING_KEY_S=3, JEVAING_KEY_D=4,
@@ -49,6 +51,13 @@ int32_t jevaing_key_down(jevaing_key key);
 int32_t jevaing_clear(jevaing_color color);
 int32_t jevaing_draw_quad(jevaing_vec2 center, jevaing_vec2 size, jevaing_color color);
 int32_t jevaing_draw_cube(jevaing_transform transform, jevaing_color color);
+/* The caller owns texture handles and destroys them with texture_destroy.
+   Drawing a sprite is valid only inside on_render_2d. */
+int32_t jevaing_texture_load(const char* path, jevaing_texture** out_texture);
+int32_t jevaing_texture_create_checker(int32_t width, int32_t height, int32_t cell_size, jevaing_texture** out_texture);
+int32_t jevaing_texture_get_size(const jevaing_texture* texture, int32_t* out_width, int32_t* out_height);
+int32_t jevaing_texture_destroy(jevaing_texture* texture);
+int32_t jevaing_draw_sprite(const jevaing_texture* texture, jevaing_vec2 center, jevaing_vec2 size, jevaing_color tint);
 /* The caller owns the opaque scene and must destroy it exactly once.
    Scene and entity operations are not thread-safe. IDs remain valid until
    deletion or a successful scene load; they are not pointers. */
@@ -62,6 +71,17 @@ int32_t jevaing_scene_entity_destroy(jevaing_scene* scene, jevaing_entity_id id)
 int32_t jevaing_scene_entity_set_parent(jevaing_scene* scene, jevaing_entity_id child, jevaing_entity_id parent);
 int32_t jevaing_scene_entity_get_transform(const jevaing_scene* scene, jevaing_entity_id id, jevaing_transform* out_transform);
 int32_t jevaing_scene_entity_set_transform(jevaing_scene* scene, jevaing_entity_id id, const jevaing_transform* transform);
+/* Physics components belong to their entity. Call scene_update to create bodies
+   before setting velocities. A missing backend returns INVALID_STATE. */
+int32_t jevaing_scene_entity_set_body2d(jevaing_scene* scene, jevaing_entity_id id, int32_t body_type);
+int32_t jevaing_scene_entity_set_box2d(jevaing_scene* scene, jevaing_entity_id id, jevaing_vec2 size);
+int32_t jevaing_scene_entity_set_body3d(jevaing_scene* scene, jevaing_entity_id id, int32_t body_type);
+int32_t jevaing_scene_entity_set_box3d(jevaing_scene* scene, jevaing_entity_id id, jevaing_vec3 size);
+int32_t jevaing_scene_update(jevaing_scene* scene, double delta_time);
+int32_t jevaing_scene_body2d_set_velocity(jevaing_scene* scene, jevaing_entity_id id, jevaing_vec2 velocity);
+int32_t jevaing_scene_body2d_get_velocity(const jevaing_scene* scene, jevaing_entity_id id, jevaing_vec2* out_velocity);
+int32_t jevaing_scene_body3d_set_velocity(jevaing_scene* scene, jevaing_entity_id id, jevaing_vec3 velocity);
+int32_t jevaing_scene_body3d_get_velocity(const jevaing_scene* scene, jevaing_entity_id id, jevaing_vec3* out_velocity);
 #ifdef __cplusplus
 }
 #endif
