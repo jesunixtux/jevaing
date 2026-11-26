@@ -318,7 +318,9 @@ namespace Jevaing::Internal
             scene.SetParent(childId, cameraId, &error);
 
             const std::filesystem::path scenePath =
-                std::filesystem::temp_directory_path() / "jevaing-scene-serialization.scene";
+                std::filesystem::temp_directory_path() /
+                ("jevaing-scene-serialization-" + std::to_string(
+                    std::chrono::steady_clock::now().time_since_epoch().count()) + ".scene");
 
             if (!scene.Save(scenePath.string(), error))
             {
@@ -335,7 +337,6 @@ namespace Jevaing::Internal
             }
 
             std::error_code removeError;
-            std::filesystem::remove(scenePath, removeError);
 
             bool success = true;
             success &= ReportTest(loaded.GetEntities().size() == 2, "Scene entity count survives save/load");
@@ -343,6 +344,33 @@ namespace Jevaing::Internal
             success &= ReportTest(loaded.FindEntityByName("Child") != nullptr, "Entity name survives save/load");
             success &= ReportTest(loaded.FindEntity(20)->Parent == 10, "Parent relationship survives save/load");
             success &= ReportTest(loaded.FindEntity(10)->Camera.has_value(), "Camera component survives save/load");
+
+            if (scene.Save(scenePath.string(), error))
+            {
+                std::filesystem::remove(scenePath, removeError);
+                Scene recovered;
+                success &= ReportTest(Scene::LoadFromFile(scenePath.string(), ".", recovered, error) &&
+                    recovered.FindEntity(20) != nullptr,
+                    "Scene loads backup after interrupted replacement");
+            }
+            else
+            {
+                success &= ReportTest(false, "Scene backup save failed: " + error);
+            }
+            std::filesystem::remove(scenePath, removeError);
+            std::filesystem::remove(scenePath.string() + ".bak", removeError);
+
+            Scene unsafeScene("unsafe-assets");
+            SceneEntity* unsafeEntity = unsafeScene.FindEntity(unsafeScene.CreateEntity("Sprite"));
+            unsafeEntity->SpriteRenderer2D = SpriteRenderer2DComponent{};
+            unsafeEntity->SpriteRenderer2D->TexturePath = "../outside.png";
+            const auto unsafePath = scenePath.string() + ".unsafe";
+            Scene rejected;
+            const bool unsafeSaved = unsafeScene.Save(unsafePath, error);
+            success &= ReportTest(unsafeSaved &&
+                !Scene::LoadFromFile(unsafePath, std::filesystem::temp_directory_path().string(), rejected, error),
+                "Scene rejects asset traversal outside its root");
+            std::filesystem::remove(unsafePath, removeError);
 
             return success ? 0 : 2;
         }
@@ -634,7 +662,9 @@ namespace Jevaing::Internal
             entity2D->CircleCollider2D->Radius = 0.75f;
 
             const std::filesystem::path scenePath =
-                std::filesystem::temp_directory_path() / "jevaing-physics-serialization.scene";
+                std::filesystem::temp_directory_path() /
+                ("jevaing-physics-serialization-" + std::to_string(
+                    std::chrono::steady_clock::now().time_since_epoch().count()) + ".scene");
             std::string error;
 
             if (!scene.Save(scenePath.string(), error))
@@ -802,8 +832,9 @@ namespace Jevaing::Internal
         int RunWindowsBuildTest()
         {
             const std::filesystem::path tempRoot =
-                std::filesystem::temp_directory_path() / "jevaing-windows-build-test";
-            std::filesystem::remove_all(tempRoot);
+                std::filesystem::temp_directory_path() /
+                ("jevaing-windows-build-test-" + std::to_string(
+                    std::chrono::steady_clock::now().time_since_epoch().count()));
             std::filesystem::create_directories(tempRoot);
 
             std::string projectFile;
@@ -820,24 +851,42 @@ namespace Jevaing::Internal
                 return ReportTest(false, error) ? 0 : 2;
             }
 
+            const std::string alternateScene = "Scenes/alternate.scene";
+            Scene alternate("alternate");
+            if (!alternate.Save((std::filesystem::path(project.ProjectDirectory) / alternateScene).string(), error))
+                return ReportTest(false, error) ? 0 : 2;
+
             BuildSettings settings;
             settings.Target = BuildTarget::WindowsDesktopX64;
+#ifdef NDEBUG
+            settings.Configuration = BuildConfiguration::Release;
+#else
             settings.Configuration = BuildConfiguration::Debug;
+#endif
             settings.OutputDirectory = "Builds";
-            settings.StartupScene = project.StartupScene;
-            settings.ScenesInBuild.push_back(project.StartupScene);
+            settings.StartupScene = alternateScene;
+            settings.ScenesInBuild.push_back(alternateScene);
+            settings.TrustProjectBuildScripts = true;
+            settings.SmokeTestExport = true;
 
             const BuildResult result = BuildWindowsDesktop(project, settings, false);
+            const std::filesystem::path exportRoot = std::filesystem::path(result.OutputPath).parent_path();
+            ProjectConfig exported;
             const bool success =
                 result.Success &&
                 !result.OutputPath.empty() &&
-                std::filesystem::exists(result.OutputPath);
+                std::filesystem::exists(result.OutputPath) &&
+                Project::Load((exportRoot / "jevaing.project").string(), exported, error) &&
+                exported.StartupScene == alternateScene &&
+                std::filesystem::exists(exportRoot / alternateScene) &&
+                !std::filesystem::exists(exportRoot / project.StartupScene);
 
             std::filesystem::remove_all(tempRoot);
 
             return ReportTest(
                 success,
-                success ? "Windows Desktop x64 build produced executable" : result.Message
+                success ? "Windows export ran and staged only the selected scene" :
+                    (result.Success ? "Exported scene selection or metadata is incorrect: " + error : result.Message)
             ) ? 0 : 2;
         }
 
@@ -954,6 +1003,56 @@ namespace Jevaing::Internal
                 defaultConfig.Width > 0 && defaultConfig.Height > 0,
                 "GameConfig has a valid default window size"
             );
+
+            const std::filesystem::path safetyRoot = std::filesystem::temp_directory_path() /
+                ("jevaing-safety-" + std::to_string(
+                    std::chrono::steady_clock::now().time_since_epoch().count()));
+            std::filesystem::create_directories(safetyRoot);
+            ProjectConfig safeProject;
+            safeProject.Name = "SafetyTest";
+            safeProject.ProjectDirectory = safetyRoot.string();
+            safeProject.StartupScene = "Scenes/main.scene";
+            std::string pathError, resolved;
+            success &= ReportTest(Project::Validate(safeProject, pathError),
+                "Valid project paths are accepted");
+            success &= ReportTest(!Project::ResolvePathChecked(safeProject, "../outside", resolved, pathError) &&
+                !Project::ResolvePathChecked(safeProject, "C:/outside", resolved, pathError),
+                "Project paths cannot escape the project directory");
+#ifdef _WIN32
+            BuildSettings untrustedBuild;
+            success &= ReportTest(!BuildWindowsDesktop(safeProject, untrustedBuild, false).Success,
+                "Build rejects untrusted project scripts");
+            {
+                std::ofstream cmakeFile(safetyRoot / "CMakeLists.txt");
+                cmakeFile << "cmake_minimum_required(VERSION 3.20)\n";
+            }
+            std::filesystem::create_directories(safetyRoot / "Scenes");
+            {
+                std::ofstream sceneFile(safetyRoot / "Scenes" / "main.scene");
+                sceneFile << "scene=safety\n";
+            }
+            BuildSettings escapingBuild;
+            escapingBuild.TrustProjectBuildScripts = true;
+            escapingBuild.OutputDirectory = "../outside";
+            success &= ReportTest(BuildWindowsDesktop(safeProject, escapingBuild, false).Message.find(
+                "Build output must be inside") != std::string::npos,
+                "Build rejects an output directory outside the project");
+#endif
+            const auto safetyFile = safetyRoot / "jevaing.project";
+            std::string saveError;
+            const bool savedFirst = Project::Save(safetyFile.string(), safeProject, saveError);
+            const bool savedSecond = savedFirst && Project::Save(safetyFile.string(), safeProject, saveError);
+            success &= ReportTest(savedSecond && std::filesystem::exists(safetyFile.string() + ".bak"),
+                "Project save creates a recoverable backup");
+            if (savedSecond)
+            {
+                std::filesystem::remove(safetyFile);
+                ProjectConfig recovered;
+                success &= ReportTest(Project::Load(safetyFile.string(), recovered, saveError) &&
+                    recovered.Name == safeProject.Name,
+                    "Project loads backup after interrupted replacement");
+            }
+            std::filesystem::remove_all(safetyRoot);
 
             if (success)
             {

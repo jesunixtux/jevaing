@@ -36,6 +36,8 @@ namespace Jevaing::Internal
         std::string OutputDirectory = "Builds";
         std::string StartupScene;
         std::vector<std::string> ScenesInBuild;
+        bool TrustProjectBuildScripts = false;
+        bool SmokeTestExport = false;
     };
 
     struct BuildResult

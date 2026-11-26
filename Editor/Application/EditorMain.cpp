@@ -61,7 +61,6 @@ namespace
         std::string NewProjectLocation;
         std::string OpenProjectPath;
         std::string CurrentScenePath;
-        std::string PlaySnapshotPath;
         std::string PendingPath;
         std::string ProjectSelectedDirectory;
         std::string NewAssetName = "NewScript.cpp";
@@ -324,6 +323,7 @@ namespace
             (std::filesystem::path(config.ProjectDirectory) / config.AssetRoot).string();
         g_editor.BuildSettings.StartupScene = config.StartupScene;
         g_editor.BuildSettings.ScenesInBuild = { config.StartupScene };
+        g_editor.BuildSettings.TrustProjectBuildScripts = false;
         Jevaing::Internal::Logger::Info("Opened project: " + config.Name);
         return true;
     }
@@ -353,12 +353,25 @@ namespace
             return false;
         }
 
+        std::error_code pathError;
+        const std::filesystem::path sceneRoot = std::filesystem::weakly_canonical(
+            Jevaing::Project::ResolvePath(g_editor.Project, g_editor.Project.SceneRoot), pathError);
+        const std::filesystem::path selected = std::filesystem::weakly_canonical(scenePath, pathError);
+        auto rootPart = sceneRoot.begin(), selectedPart = selected.begin();
+        while (rootPart != sceneRoot.end() && selectedPart != selected.end() &&
+            *rootPart == *selectedPart) { ++rootPart; ++selectedPart; }
+        if (pathError || rootPart != sceneRoot.end() || selected == sceneRoot)
+        {
+            Jevaing::Internal::Logger::Error("Scene must be inside the project's scene directory.");
+            return false;
+        }
+
         std::string error;
         Jevaing::Scene scene;
         const std::string assetRoot =
             Jevaing::Project::ResolvePath(g_editor.Project, g_editor.Project.AssetRoot);
 
-        if (!scene.Load(scenePath, assetRoot, error))
+        if (!scene.Load(selected.string(), assetRoot, error))
         {
             Jevaing::Internal::Logger::Error(error);
             return false;
@@ -366,7 +379,7 @@ namespace
 
         StopPlayMode();
         g_editor.EditScene = std::move(scene);
-        g_editor.CurrentScenePath = scenePath;
+        g_editor.CurrentScenePath = selected.string();
         g_editor.SelectedEntity = Jevaing::InvalidEntityId;
         g_editor.DirtyScene = false;
         Jevaing::Internal::Logger::Info("Loaded scene: " + scenePath);
@@ -379,7 +392,6 @@ namespace
         g_editor.HasProject = false;
         g_editor.DirtyScene = false;
         g_editor.CurrentScenePath.clear();
-        g_editor.PlaySnapshotPath.clear();
         g_editor.PendingPath.clear();
         g_editor.ProjectSelectedDirectory.clear();
         g_editor.Project = Jevaing::ProjectConfig{};
@@ -578,8 +590,9 @@ namespace
         }
 
         std::string error;
-        const std::filesystem::path snapshot =
-            std::filesystem::temp_directory_path() / "jevaing-editor-playmode.scene";
+        const std::filesystem::path snapshot = std::filesystem::temp_directory_path() /
+            ("jevaing-editor-playmode-" + std::to_string(GetCurrentProcessId()) + "-" +
+             std::to_string(GetTickCount64()) + ".scene");
 
         if (!g_editor.EditScene.Save(snapshot.string(), error))
         {
@@ -595,11 +608,14 @@ namespace
             error
         ))
         {
+            std::error_code ignored;
+            std::filesystem::remove(snapshot, ignored);
             Jevaing::Internal::Logger::Error(error);
             return;
         }
 
-        g_editor.PlaySnapshotPath = snapshot.string();
+        std::error_code ignored;
+        std::filesystem::remove(snapshot, ignored);
         g_editor.PlayScene = std::move(playScene);
         g_editor.Playing = true;
         g_editor.Paused = false;
@@ -1789,10 +1805,37 @@ namespace
         ImGui::SetNextWindowSize(ImVec2(360, 280), ImGuiCond_Once);
         ImGui::Begin("Build Settings", &g_editor.ShowBuildSettings);
         ImGui::TextUnformatted("Scenes in Build");
-        for (const std::string& scene : g_editor.BuildSettings.ScenesInBuild)
+        if (g_editor.HasProject)
         {
-            bool enabled = true;
-            ImGui::Checkbox(scene.c_str(), &enabled);
+            std::error_code scanError;
+            const std::filesystem::path sceneRoot = Jevaing::Project::ResolvePath(
+                g_editor.Project, g_editor.Project.SceneRoot);
+            for (std::filesystem::recursive_directory_iterator it(sceneRoot, scanError), end;
+                 !scanError && it != end; it.increment(scanError))
+            {
+                if (it->is_symlink() || !it->is_regular_file() || it->path().extension() != ".scene")
+                    continue;
+                const std::string scene = std::filesystem::relative(
+                    it->path(), g_editor.Project.ProjectDirectory, scanError).generic_string();
+                if (scanError) break;
+                auto& selected = g_editor.BuildSettings.ScenesInBuild;
+                bool enabled = std::find(selected.begin(), selected.end(), scene) != selected.end();
+                const bool startup = g_editor.BuildSettings.StartupScene == scene;
+                if (startup) ImGui::BeginDisabled();
+                if (ImGui::Checkbox(scene.c_str(), &enabled))
+                {
+                    if (enabled) selected.push_back(scene);
+                    else selected.erase(std::remove(selected.begin(), selected.end(), scene), selected.end());
+                }
+                if (startup) ImGui::EndDisabled();
+                if (enabled)
+                {
+                    ImGui::SameLine();
+                    if (ImGui::RadioButton(("Startup##" + scene).c_str(), startup))
+                        g_editor.BuildSettings.StartupScene = scene;
+                }
+            }
+            if (scanError) ImGui::TextUnformatted("Cannot scan scene directory.");
         }
 
         ImGui::SeparatorText("Target");
@@ -1838,6 +1881,7 @@ namespace
         }
 
         ImGui::InputText("Output", &g_editor.BuildSettings.OutputDirectory);
+        ImGui::Checkbox("Trust this project's CMake build scripts", &g_editor.BuildSettings.TrustProjectBuildScripts);
 
         if (ImGui::Button("Build"))
         {

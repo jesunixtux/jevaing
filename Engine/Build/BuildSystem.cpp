@@ -4,20 +4,80 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cmath>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <system_error>
 #include <utility>
 #include <vector>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace Jevaing::Internal
 {
     namespace
     {
         namespace fs = std::filesystem;
+
+        bool IsWithin(const fs::path& root, const fs::path& path)
+        {
+            auto a = root.begin(), b = path.begin();
+            while (a != root.end() && b != path.end() && *a == *b) { ++a; ++b; }
+            return a == root.end();
+        }
+
+#ifdef _WIN32
+        std::wstring QuoteArgument(const std::wstring& value)
+        {
+            std::wstring result = L"\"";
+            std::size_t slashes = 0;
+            for (wchar_t c : value)
+            {
+                if (c == L'\\') { ++slashes; continue; }
+                if (c == L'"')
+                {
+                    result.append(slashes * 2 + 1, L'\\');
+                    result += c;
+                    slashes = 0;
+                    continue;
+                }
+                result.append(slashes, L'\\');
+                slashes = 0;
+                result += c;
+            }
+            result.append(slashes * 2, L'\\');
+            return result + L"\"";
+        }
+
+        bool RunProcess(const std::vector<std::wstring>& arguments, DWORD& exitCode,
+            DWORD timeout = INFINITE)
+        {
+            std::wstring command;
+            for (const auto& arg : arguments)
+            {
+                if (!command.empty()) command += L' ';
+                command += QuoteArgument(arg);
+            }
+            STARTUPINFOW startup{};
+            startup.cb = sizeof(startup);
+            PROCESS_INFORMATION process{};
+            if (!CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE, 0,
+                nullptr, nullptr, &startup, &process)) return false;
+            const DWORD wait = WaitForSingleObject(process.hProcess, timeout);
+            if (wait == WAIT_TIMEOUT)
+            {
+                TerminateProcess(process.hProcess, 1);
+                WaitForSingleObject(process.hProcess, INFINITE);
+            }
+            const bool ok = wait == WAIT_OBJECT_0 && GetExitCodeProcess(process.hProcess, &exitCode);
+            CloseHandle(process.hThread);
+            CloseHandle(process.hProcess);
+            return ok;
+        }
+#endif
 
         bool IsValidProjectName(const std::string& name)
         {
@@ -59,6 +119,19 @@ namespace Jevaing::Internal
         bool CopyDirectory(const fs::path& source, const fs::path& destination, std::string& error)
         {
             std::error_code ec;
+            if (fs::exists(destination, ec))
+            {
+                for (fs::recursive_directory_iterator entry(destination, fs::directory_options::none, ec), end;
+                    !ec && entry != end; entry.increment(ec))
+                {
+                    if (entry->is_symlink(ec) || ec)
+                    {
+                        error = "Export destination contains a symbolic link: " + entry->path().string();
+                        return false;
+                    }
+                }
+                if (ec) { error = "Cannot inspect export destination: " + ec.message(); return false; }
+            }
             fs::create_directories(destination, ec);
             if (ec)
             {
@@ -67,6 +140,17 @@ namespace Jevaing::Internal
             }
             if (!fs::exists(source))
                 return true;
+
+            for (fs::recursive_directory_iterator entry(source, fs::directory_options::none, ec), end;
+                !ec && entry != end; entry.increment(ec))
+            {
+                if (entry->is_symlink(ec) || ec)
+                {
+                    error = "Asset directory contains a symbolic link or cannot be inspected: " + entry->path().string();
+                    return false;
+                }
+            }
+            if (ec) { error = "Cannot inspect assets: " + ec.message(); return false; }
 
             fs::copy(source, destination,
                 fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec);
@@ -139,6 +223,7 @@ float JevaingDemoSpeed(void) { return 2.0f; }
 class StarterGame final : public Jevaing::Game
 {
 public:
+    bool Failed() const { return m_failed; }
     void OnStart() override
     {
         std::string error;
@@ -205,7 +290,8 @@ int main(int argc, char** argv)
     config.Title = "Jevaing Starter";
     config.Width = 1280;
     config.Height = 720;
-    return Jevaing::Run(game, config, argc, argv);
+    const int exitCode = Jevaing::Run(game, config, argc, argv);
+    return game.Failed() ? 2 : exitCode;
 }
 )JEVAING";
 
@@ -213,7 +299,8 @@ int main(int argc, char** argv)
         {
             error.clear();
             const fs::path file = fs::temp_directory_path() /
-                (playMode ? "jevaing-play-restore-test.scene" : "jevaing-roundtrip-test.scene");
+                (std::string(playMode ? "jevaing-play-restore-" : "jevaing-roundtrip-") +
+                 std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".scene");
 
             Scene editable("test");
             const EntityId object = editable.CreateEntity("Box");
@@ -365,6 +452,17 @@ int main(int argc, char** argv)
             result.Message = "Unsupported target for Windows Desktop build.";
             return result;
         }
+        if (!settings.TrustProjectBuildScripts)
+        {
+            result.Message = "Building executes the project's CMake scripts. Enable trust for this project explicitly.";
+            return result;
+        }
+        std::string validationError;
+        if (!Project::Validate(project, validationError))
+        {
+            result.Message = validationError;
+            return result;
+        }
 #ifndef JEVAING_SOURCE_ROOT
         result.Message = "JEVAING_SOURCE_ROOT is not configured.";
         return result;
@@ -385,22 +483,53 @@ int main(int argc, char** argv)
             : (fs::path(settings.OutputDirectory).is_absolute()
                 ? fs::path(settings.OutputDirectory)
                 : projectDir / settings.OutputDirectory);
-        const std::string quotedProject = "\"" + projectDir.string() + "\"";
-        const std::string quotedBuild = "\"" + buildDir.string() + "\"";
-        const std::string quotedEngine = "\"" + engineRoot.string() + "\"";
-
-        const std::string configure =
-            "cmake -S " + quotedProject + " -B " + quotedBuild +
-            " -DJEVAING_ENGINE_ROOT:PATH=" + quotedEngine;
-        if (std::system(configure.c_str()) != 0)
+        std::error_code pathError;
+        const fs::path canonicalProject = fs::weakly_canonical(projectDir, pathError);
+        const fs::path canonicalOutput = fs::weakly_canonical(outputDir, pathError);
+        const fs::path canonicalAssets = fs::weakly_canonical(projectDir / project.AssetRoot, pathError);
+        const fs::path canonicalScenes = fs::weakly_canonical(projectDir / project.SceneRoot, pathError);
+        const fs::path canonicalSource = fs::weakly_canonical(projectDir / "Source", pathError);
+        const fs::path canonicalBuild = fs::weakly_canonical(buildDir, pathError);
+        const std::string startup = settings.StartupScene.empty() ? project.StartupScene : settings.StartupScene;
+        std::vector<std::string> selectedScenes = settings.ScenesInBuild;
+        if (selectedScenes.empty()) selectedScenes.push_back(startup);
+        if (std::find(selectedScenes.begin(), selectedScenes.end(), startup) == selectedScenes.end())
+        {
+            result.Message = "Startup scene must be included in Scenes in Build.";
+            return result;
+        }
+        std::vector<fs::path> scenePaths;
+        for (const std::string& scene : selectedScenes)
+        {
+            std::string resolved, sceneError;
+            if (!Project::ResolvePathChecked(project, scene, resolved, sceneError) ||
+                !IsWithin(canonicalScenes, fs::path(resolved)) ||
+                !fs::is_regular_file(resolved) || fs::is_symlink(resolved))
+            {
+                result.Message = "Invalid scene in build: " + scene;
+                return result;
+            }
+            scenePaths.push_back(resolved);
+        }
+        if (pathError || canonicalOutput == canonicalProject ||
+            !IsWithin(canonicalProject, canonicalOutput) ||
+            IsWithin(canonicalAssets, canonicalOutput) ||
+            IsWithin(canonicalScenes, canonicalOutput) ||
+            IsWithin(canonicalSource, canonicalOutput) ||
+            IsWithin(canonicalBuild, canonicalOutput))
+        {
+            result.Message = "Build output must be inside the project and outside source, scene, asset and build directories.";
+            return result;
+        }
+        DWORD exitCode = 0;
+        if (!RunProcess({L"cmake", L"-S", projectDir.wstring(), L"-B", buildDir.wstring(),
+            L"-DJEVAING_ENGINE_ROOT:PATH=" + engineRoot.wstring()}, exitCode) || exitCode != 0)
         {
             result.Message = "CMake configure failed. Check Visual Studio, CMake and dependencies.";
             return result;
         }
-        const std::string build =
-            "cmake --build " + quotedBuild + " --config " + config +
-            " --target " + project.Name;
-        if (std::system(build.c_str()) != 0)
+        if (!RunProcess({L"cmake", L"--build", buildDir.wstring(), L"--config",
+            fs::path(config).wstring(), L"--target", fs::path(project.Name).wstring()}, exitCode) || exitCode != 0)
         {
             result.Message = "CMake compilation failed.";
             return result;
@@ -421,20 +550,79 @@ int main(int argc, char** argv)
             result.Message = "Cannot create output directory: " + ec.message();
             return result;
         }
+        fs::path stagedComponent = outputDir;
+        for (const auto& component : fs::path(project.SceneRoot))
+        {
+            stagedComponent /= component;
+            if (fs::exists(stagedComponent, ec) && fs::is_symlink(stagedComponent, ec))
+            {
+                result.Message = "Export scene directory contains a symbolic link.";
+                return result;
+            }
+            if (ec) { result.Message = "Cannot inspect export scene directory: " + ec.message(); return result; }
+        }
+        const fs::path stagedScenes = fs::weakly_canonical(outputDir / project.SceneRoot, ec);
+        if (ec || stagedScenes == canonicalOutput || !IsWithin(canonicalOutput, stagedScenes))
+        {
+            result.Message = "Export scene directory escapes build output.";
+            return result;
+        }
+        fs::remove_all(stagedScenes, ec);
+        if (ec)
+        {
+            result.Message = "Cannot clear staged scenes: " + ec.message();
+            return result;
+        }
+        fs::path stagedAssetComponent = outputDir;
+        for (const auto& component : fs::path(project.AssetRoot))
+        {
+            stagedAssetComponent /= component;
+            if (fs::exists(stagedAssetComponent, ec) && fs::is_symlink(stagedAssetComponent, ec))
+            {
+                result.Message = "Export asset directory contains a symbolic link.";
+                return result;
+            }
+            if (ec) { result.Message = "Cannot inspect export asset directory: " + ec.message(); return result; }
+        }
+        const fs::path stagedAssets = fs::weakly_canonical(stagedAssetComponent, ec);
+        if (ec || stagedAssets == canonicalOutput || !IsWithin(canonicalOutput, stagedAssets))
+        {
+            result.Message = "Export asset directory escapes build output.";
+            return result;
+        }
         const fs::path destination = outputDir / exe.filename();
+        if (fs::is_symlink(destination, ec))
+        {
+            result.Message = "Export executable destination is a symbolic link.";
+            return result;
+        }
+        ec.clear();
         fs::copy_file(exe, destination, fs::copy_options::overwrite_existing, ec);
-        if (ec ||
-            !CopyDirectory(projectDir / project.AssetRoot, outputDir / project.AssetRoot, error) ||
-            !CopyDirectory(projectDir / project.SceneRoot, outputDir / project.SceneRoot, error))
+        if (ec || !CopyDirectory(projectDir / project.AssetRoot, outputDir / project.AssetRoot, error))
         {
             result.Message = ec ? ec.message() : error;
             return result;
         }
-        fs::copy_file(projectDir / "jevaing.project",
-            outputDir / "jevaing.project", fs::copy_options::overwrite_existing, ec);
-        if (ec)
+        for (const fs::path& scene : scenePaths)
         {
-            result.Message = "Cannot stage project metadata: " + ec.message();
+            const fs::path relative = fs::relative(scene, canonicalProject, ec);
+            const fs::path staged = outputDir / relative;
+            if (ec) { result.Message = "Cannot stage scene: " + ec.message(); return result; }
+            fs::create_directories(staged.parent_path(), ec);
+            if (!ec) fs::copy_file(scene, staged, fs::copy_options::overwrite_existing, ec);
+            if (ec) { result.Message = "Cannot stage scene: " + ec.message(); return result; }
+        }
+        ProjectConfig exported = project;
+        exported.ProjectDirectory = outputDir.string();
+        exported.StartupScene = startup;
+        if (!Project::Save((outputDir / "jevaing.project").string(), exported, error))
+        { result.Message = "Cannot stage project metadata: " + error; return result; }
+
+        if (settings.SmokeTestExport &&
+            (!RunProcess({destination.wstring(), L"--renderer", L"null", L"--frames", L"2"},
+                exitCode, 30000) || exitCode != 0))
+        {
+            result.Message = "Exported game failed its two-frame runtime smoke test.";
             return result;
         }
 
@@ -443,8 +631,7 @@ int main(int argc, char** argv)
         result.Message = "Game build completed. Validate on a clean Windows installation.";
         if (runAfterBuild)
         {
-            const std::string command = "\"" + result.OutputPath + "\"";
-            if (std::system(command.c_str()) != 0)
+            if (!RunProcess({destination.wstring()}, exitCode) || exitCode != 0)
                 result.Message += " Game process returned a nonzero status.";
         }
         return result;

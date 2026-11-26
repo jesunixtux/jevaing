@@ -16,6 +16,9 @@ namespace Jevaing
     class Project
     {
     public:
+        static bool Validate(const ProjectConfig& config, std::string& error);
+        static bool ResolvePathChecked(const ProjectConfig& config,
+            const std::string& relativePath, std::string& resolved, std::string& error);
         static bool Load(
             const std::string& path,
             ProjectConfig& config,

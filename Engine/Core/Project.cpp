@@ -1,4 +1,5 @@
 #include <Jevaing/Project.h>
+#include "AtomicFile.h"
 
 #include <algorithm>
 #include <cctype>
@@ -11,6 +12,27 @@ namespace Jevaing
 {
     namespace
     {
+        namespace fs = std::filesystem;
+
+        bool Inside(const fs::path& root, const fs::path& candidate)
+        {
+            auto parent = root.begin();
+            auto child = candidate.begin();
+            while (parent != root.end() && child != candidate.end() && *parent == *child)
+            {
+                ++parent;
+                ++child;
+            }
+            return parent == root.end();
+        }
+
+        bool ValidName(const std::string& name)
+        {
+            return !name.empty() && name.size() <= 64 &&
+                std::isalpha(static_cast<unsigned char>(name.front())) &&
+                std::all_of(name.begin(), name.end(), [](unsigned char c)
+                { return std::isalnum(c) || c == '_' || c == '-'; });
+        }
         std::string Trim(const std::string& value)
         {
             const auto begin = std::find_if_not(
@@ -58,6 +80,69 @@ namespace Jevaing
         }
     }
 
+    bool Project::ResolvePathChecked(const ProjectConfig& config,
+        const std::string& relativePath, std::string& resolved, std::string& error)
+    {
+        resolved.clear();
+        if (config.ProjectDirectory.empty() || relativePath.empty())
+        {
+            error = "Project directory and relative path are required.";
+            return false;
+        }
+        const fs::path path(relativePath);
+        if (path.is_absolute() || path.has_root_name() || path.has_root_directory())
+        {
+            error = "Project path must be relative: " + relativePath;
+            return false;
+        }
+        for (const auto& component : path)
+            if (component == "..")
+            {
+                error = "Parent traversal is not allowed in project paths: " + relativePath;
+                return false;
+            }
+        std::error_code ec;
+        const fs::path root = fs::weakly_canonical(config.ProjectDirectory, ec);
+        if (ec) { error = "Invalid project directory: " + ec.message(); return false; }
+        const fs::path target = fs::weakly_canonical(root / path, ec);
+        if (ec || !Inside(root, target) || target == root)
+        {
+            error = "Project path escapes its directory: " + relativePath;
+            return false;
+        }
+        resolved = target.string();
+        return true;
+    }
+
+    bool Project::Validate(const ProjectConfig& config, std::string& error)
+    {
+        if (!ValidName(config.Name))
+        {
+            error = "Project name must start with a letter and contain only letters, digits, - or _.";
+            return false;
+        }
+        std::string resolved;
+        for (const std::string* path : {&config.StartupScene, &config.AssetRoot, &config.SceneRoot})
+            if (!ResolvePathChecked(config, *path, resolved, error)) return false;
+        std::string startup, sceneRoot;
+        std::string assetRoot;
+        if (!ResolvePathChecked(config, config.StartupScene, startup, error) ||
+            !ResolvePathChecked(config, config.SceneRoot, sceneRoot, error) ||
+            !ResolvePathChecked(config, config.AssetRoot, assetRoot, error) ||
+            !Inside(fs::path(sceneRoot), fs::path(startup)))
+        {
+            if (error.empty()) error = "Startup scene must be inside the scene directory.";
+            return false;
+        }
+        if (Inside(fs::path(sceneRoot), fs::path(assetRoot)) ||
+            Inside(fs::path(assetRoot), fs::path(sceneRoot)))
+        {
+            error = "Asset and scene directories must be separate.";
+            return false;
+        }
+        return true;
+    }
+
     bool Project::Load(
         const std::string& path,
         ProjectConfig& config,
@@ -68,6 +153,11 @@ namespace Jevaing
         error.clear();
 
         std::ifstream file(path);
+        if (!file && fs::exists(path + ".bak"))
+        {
+            file.clear();
+            file.open(path + ".bak");
+        }
 
         if (!file)
         {
@@ -145,7 +235,7 @@ namespace Jevaing
             config.SceneRoot = "Scenes";
         }
 
-        return true;
+        return Validate(config, error);
     }
 
     bool Project::Save(
@@ -155,21 +245,14 @@ namespace Jevaing
     )
     {
         error.clear();
-        std::ofstream file(path);
-
-        if (!file)
+        if (!Validate(config, error)) return false;
+        return Internal::WriteAtomicFile(path, [&](std::ostream& file)
         {
-            error = "Failed to write project file: " + path;
-            return false;
-        }
-
-        file
-            << "name=" << config.Name << "\n"
-            << "startupScene=" << config.StartupScene << "\n"
-            << "assetRoot=" << config.AssetRoot << "\n"
-            << "sceneRoot=" << config.SceneRoot << "\n";
-
-        return true;
+            file << "name=" << config.Name << "\n"
+                 << "startupScene=" << config.StartupScene << "\n"
+                 << "assetRoot=" << config.AssetRoot << "\n"
+                 << "sceneRoot=" << config.SceneRoot << "\n";
+        }, error);
     }
 
     std::string Project::ResolvePath(
@@ -177,14 +260,8 @@ namespace Jevaing
         const std::string& projectRelativePath
     )
     {
-        const std::filesystem::path path(projectRelativePath);
-
-        if (path.is_absolute())
-        {
-            return path.string();
-        }
-
-        return (std::filesystem::path(config.ProjectDirectory) / path).string();
+        std::string resolved, error;
+        return ResolvePathChecked(config, projectRelativePath, resolved, error) ? resolved : std::string{};
     }
 
     std::string Project::ResolveAssetPath(
@@ -192,18 +269,7 @@ namespace Jevaing
         const std::string& assetRelativePath
     )
     {
-        const std::filesystem::path path(assetRelativePath);
-
-        if (path.is_absolute())
-        {
-            return path.string();
-        }
-
-        return (
-            std::filesystem::path(config.ProjectDirectory) /
-            std::filesystem::path(config.AssetRoot) /
-            path
-        ).string();
+        return ResolvePath(config, (fs::path(config.AssetRoot) / assetRelativePath).string());
     }
 
     std::string Project::ResolveStartupScenePath(const ProjectConfig& config)

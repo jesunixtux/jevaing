@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "Logger.h"
+#include "AtomicFile.h"
 
 namespace Jevaing
 {
@@ -826,13 +827,7 @@ namespace Jevaing
     bool Scene::Save(const std::string& path, std::string& error) const
     {
         error.clear();
-        std::ofstream file(path);
-
-        if (!file)
-        {
-            error = "Failed to write scene file: " + path;
-            return false;
-        }
+        std::ostringstream file;
 
         file << "scene=" << m_name << "\n\n";
 
@@ -958,7 +953,8 @@ namespace Jevaing
             file << "[/entity]\n\n";
         }
 
-        return true;
+        return Internal::WriteAtomicFile(path, [&](std::ostream& output)
+        { output << file.str(); }, error);
     }
 
     bool Scene::LoadFromFile(
@@ -970,6 +966,11 @@ namespace Jevaing
     {
         error.clear();
         std::ifstream file(path);
+        if (!file && std::filesystem::exists(path + ".bak"))
+        {
+            file.clear();
+            file.open(path + ".bak");
+        }
 
         if (!file)
         {
@@ -1708,12 +1709,30 @@ namespace Jevaing
     void Scene::AttachLoadedAssets(const std::string& assetRoot, std::string& error)
     {
         namespace fs = std::filesystem;
+        auto assetPath = [&](const std::string& relative) -> fs::path
+        {
+            if (assetRoot.empty() || relative.empty() || fs::path(relative).is_absolute())
+                return {};
+            std::error_code ec;
+            const fs::path root = fs::weakly_canonical(assetRoot, ec);
+            if (ec) return {};
+            const fs::path candidate = fs::weakly_canonical(root / relative, ec);
+            if (ec) return {};
+            auto a = root.begin(), b = candidate.begin();
+            while (a != root.end() && b != candidate.end() && *a == *b) { ++a; ++b; }
+            return a == root.end() && candidate != root ? candidate : fs::path{};
+        };
 
         for (SceneEntity& entity : m_entities)
         {
             if (entity.MeshRenderer && !entity.MeshRenderer->ModelPath.empty())
             {
-                const fs::path modelPath = fs::path(assetRoot) / entity.MeshRenderer->ModelPath;
+                const fs::path modelPath = assetPath(entity.MeshRenderer->ModelPath);
+                if (modelPath.empty())
+                {
+                    error = "Model path escapes asset directory: " + entity.MeshRenderer->ModelPath;
+                    return;
+                }
                 std::string loadError;
                 entity.MeshRenderer->ModelAsset =
                     Assets::LoadModel(modelPath.string(), &loadError);
@@ -1734,8 +1753,12 @@ namespace Jevaing
 
             if (entity.SpriteRenderer2D && !entity.SpriteRenderer2D->TexturePath.empty())
             {
-                const fs::path texturePath =
-                    fs::path(assetRoot) / entity.SpriteRenderer2D->TexturePath;
+                const fs::path texturePath = assetPath(entity.SpriteRenderer2D->TexturePath);
+                if (texturePath.empty())
+                {
+                    error = "Texture path escapes asset directory: " + entity.SpriteRenderer2D->TexturePath;
+                    return;
+                }
                 std::string loadError;
                 entity.SpriteRenderer2D->Texture =
                     Assets::LoadTexture2D(texturePath.string(), &loadError);
