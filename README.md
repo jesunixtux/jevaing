@@ -6,6 +6,8 @@ The C11 ABI is experimental; it includes scenes, entities, basic box physics, te
 
 See [architecture](ARCHITECTURE.md), [roadmap](ROADMAP.md), [build guide](documents/BUILD.md), [C API](documents/C-API.md), [editor](documents/EDITOR.md) and [test status](documents/TESTING.md) for the current implementation and limits.
 
+Try the playable 2D sample in [SkyDodge2D](Samples/SkyDodge2D/README.md). Its Windows Release ZIP is generated locally at `Samples/SkyDodge2D/Builds/SkyDodge2D-Windows-x64-Release.zip`. The first procedural 3D skybox is described in [SKYBOX.md](documents/SKYBOX.md).
+
 > **Current version:** `0.0.14`
 >
 > **Codename:** `TBD`

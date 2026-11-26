@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a serializable procedural 3D skybox with DirectX 11 background rendering and editor color controls.
+- Add the small playable `SkyDodge2D` game sample and deterministic gameplay logic check.
 - Validate project names and confine project/resource paths to the project directory.
 - Save project and scene files through a temporary file, retain a `.bak` copy and recover when the main file is missing or invalid. Reject truncated scene entities.
 - Replace shell based CMake invocation with Windows process creation and require explicit trust for project CMake scripts.

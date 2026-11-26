@@ -252,6 +252,7 @@ namespace Jevaing::Internal
         Scene CreateCliScene()
         {
             Scene scene("cli-scene");
+            scene.SetSkybox(Skybox{});
 
             const EntityId cameraId = scene.CreateEntity("Camera");
             SceneEntity* camera = scene.FindEntity(cameraId);

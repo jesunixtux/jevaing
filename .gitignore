@@ -2,6 +2,7 @@
 /.vs/
 /build/
 /build-codex/
+/build-skydodge/
 /build-minimal3d/
 /build-physics3d/
 /build-physics2d/
@@ -36,3 +37,4 @@ JevaingEditor.ini
 
 # Locally generated sample assets.
 Samples/Minimal3D/Assets/Models/gummybear.fbx
+Samples/SkyDodge2D/Builds/

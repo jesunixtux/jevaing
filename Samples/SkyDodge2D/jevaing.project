@@ -1,0 +1,4 @@
+name=SkyDodge2D
+startupScene=Scenes/main.scene
+assetRoot=Assets
+sceneRoot=Scenes

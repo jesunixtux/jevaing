@@ -11,6 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(JEVAING_BUILD_C_SAMPLE "Build pure C game and ABI test." OFF)
+option(JEVAING_BUILD_SKYDODGE_SAMPLE "Build the small 2D game smoke test." OFF)
 option(JEVAING_BUILD_SANDBOX "Build the Jevaing Sandbox executable." ON)
 option(JEVAING_BUILD_EDITOR "Build the Jevaing first-party editor." ON)
 option(JEVAING_BUILD_XBOX_SMOKE_TEST "Build the experimental Xbox smoke test sample." ON)
@@ -314,6 +315,25 @@ if(JEVAING_BUILD_C_SAMPLE)
         RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_CURRENT_BINARY_DIR}/bin/Debug"
         RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_BINARY_DIR}/bin/Release")
     target_link_libraries(JevaingCSample PRIVATE JevaingEngine)
+endif()
+
+if(JEVAING_BUILD_SKYDODGE_SAMPLE)
+    add_executable(SkyDodge2D Samples/SkyDodge2D/Source/Game.cpp)
+    target_link_libraries(SkyDodge2D PRIVATE JevaingEngine)
+    set_target_properties(SkyDodge2D PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_CURRENT_BINARY_DIR}/bin/Debug"
+        RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_BINARY_DIR}/bin/Release")
+    add_custom_command(TARGET SkyDodge2D POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/Samples/SkyDodge2D/Assets"
+            "$<TARGET_FILE_DIR:SkyDodge2D>/Assets"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/Samples/SkyDodge2D/Scenes"
+            "$<TARGET_FILE_DIR:SkyDodge2D>/Scenes"
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/Samples/SkyDodge2D/jevaing.project"
+            "$<TARGET_FILE_DIR:SkyDodge2D>/jevaing.project"
+        VERBATIM)
 endif()
 
 if(JEVAING_ENABLE_NATIVE_MODULES)

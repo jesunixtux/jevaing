@@ -17,9 +17,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Configure engine and editor
-        run: cmake -S . -B build -DJEVAING_BUILD_C_SAMPLE=ON -DJEVAING_BUILD_EDITOR=ON -DJEVAING_BUILD_XBOX_SMOKE_TEST=OFF -DJEVAING_ENABLE_NATIVE_MODULES=ON -DJEVAING_ENABLE_MODS=ON
+        run: cmake -S . -B build -DJEVAING_BUILD_C_SAMPLE=ON -DJEVAING_BUILD_SKYDODGE_SAMPLE=ON -DJEVAING_BUILD_EDITOR=ON -DJEVAING_BUILD_XBOX_SMOKE_TEST=OFF -DJEVAING_ENABLE_NATIVE_MODULES=ON -DJEVAING_ENABLE_MODS=ON
       - name: Compile engine, editor and sandbox
-        run: cmake --build build --config ${{ matrix.configuration }} --target JevaingSandbox JevaingEditor JevaingCSample JevaingModuleSmokeTest JevaingModContentTest
+        run: cmake --build build --config ${{ matrix.configuration }} --target JevaingSandbox JevaingEditor JevaingCSample SkyDodge2D JevaingModuleSmokeTest JevaingModContentTest
       - name: Run headless engine tests
         shell: pwsh
         run: |
@@ -41,6 +41,15 @@ jobs:
           }
           & .\bin\${{ matrix.configuration }}\JevaingEditor.exe --editor-info
           if ($LASTEXITCODE -ne 0) { throw "Editor info smoke failed" }
+          & .\bin\${{ matrix.configuration }}\JevaingSandbox.exe --scene-test --renderer null --frames 2
+          if ($LASTEXITCODE -ne 0) { throw "Scene and skybox smoke failed" }
+      - name: Verify 2D game sample
+        shell: pwsh
+        run: |
+          & .\build\bin\${{ matrix.configuration }}\SkyDodge2D.exe --logic-test
+          if ($LASTEXITCODE -ne 0) { throw "2D game logic failed" }
+          & .\build\bin\${{ matrix.configuration }}\SkyDodge2D.exe --renderer null --frames 2
+          if ($LASTEXITCODE -ne 0) { throw "2D game runtime failed" }
       - name: Validate pure C game ABI
         shell: pwsh
         run: |
