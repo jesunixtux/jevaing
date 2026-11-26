@@ -1012,6 +1012,16 @@ namespace Jevaing::Internal
                 !Jevaing::Input::IsKeyDown(Jevaing::Key::W),
                 "Input starts in a released state"
             );
+            InputState::BeginFrame();
+            InputState::SetKeyState(Jevaing::Key::Enter, true);
+            InputState::SetKeyState(Jevaing::Key::Enter, false);
+            success &= ReportTest(Jevaing::Input::IsKeyPressed(Jevaing::Key::Enter) &&
+                Jevaing::Input::IsKeyReleased(Jevaing::Key::Enter),
+                "Short key press and release survive one input frame");
+            InputState::BeginFrame();
+            success &= ReportTest(!Jevaing::Input::IsKeyPressed(Jevaing::Key::Enter),
+                "Key press edge clears on the next frame");
+            InputState::Reset();
 
             Jevaing::GameConfig defaultConfig;
             success &= ReportTest(

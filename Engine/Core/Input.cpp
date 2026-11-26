@@ -27,6 +27,8 @@ namespace
 
     std::array<bool, KeyCount> CurrentKeys = {};
     std::array<bool, KeyCount> PreviousKeys = {};
+    std::array<bool, KeyCount> PressedKeysThisFrame = {};
+    std::array<bool, KeyCount> ReleasedKeysThisFrame = {};
     std::array<bool, MouseButtonCount> CurrentMouseButtons = {};
     std::array<bool, MouseButtonCount> PreviousMouseButtons = {};
     std::array<std::array<bool, GamepadButtonCount>, MaxGamepads> CurrentGamepadButtons = {};
@@ -175,6 +177,8 @@ namespace Jevaing::Internal::InputState
     void BeginFrame()
     {
         PreviousKeys = CurrentKeys;
+        PressedKeysThisFrame.fill(false);
+        ReleasedKeysThisFrame.fill(false);
         PreviousMouseButtons = CurrentMouseButtons;
         PreviousMousePosition = CurrentMousePosition;
         CurrentMouseWheelDelta = 0.0f;
@@ -188,7 +192,10 @@ namespace Jevaing::Internal::InputState
             return;
         }
 
-        CurrentKeys[ToIndex(key)] = isDown;
+        const std::size_t index = ToIndex(key);
+        if (isDown && !CurrentKeys[index]) PressedKeysThisFrame[index] = true;
+        if (!isDown && CurrentKeys[index]) ReleasedKeysThisFrame[index] = true;
+        CurrentKeys[index] = isDown;
     }
 
     void SetMouseButtonState(MouseButton button, bool isDown)
@@ -215,6 +222,8 @@ namespace Jevaing::Internal::InputState
     {
         CurrentKeys.fill(false);
         PreviousKeys.fill(false);
+        PressedKeysThisFrame.fill(false);
+        ReleasedKeysThisFrame.fill(false);
         CurrentMouseButtons.fill(false);
         PreviousMouseButtons.fill(false);
         for (auto& buttons : CurrentGamepadButtons)
@@ -248,7 +257,7 @@ namespace Jevaing::Input
         }
 
         const std::size_t index = ToIndex(key);
-        return CurrentKeys[index] && !PreviousKeys[index];
+        return PressedKeysThisFrame[index] || (CurrentKeys[index] && !PreviousKeys[index]);
     }
 
     bool IsKeyReleased(Key key)
@@ -259,7 +268,7 @@ namespace Jevaing::Input
         }
 
         const std::size_t index = ToIndex(key);
-        return !CurrentKeys[index] && PreviousKeys[index];
+        return ReleasedKeysThisFrame[index] || (!CurrentKeys[index] && PreviousKeys[index]);
     }
 
     Vec2 GetMousePosition()
