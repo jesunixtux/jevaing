@@ -1,4 +1,5 @@
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <fstream>
 #include <filesystem>
@@ -306,6 +307,9 @@ namespace Jevaing::Internal
         int RunSceneSerializationTest()
         {
             Scene scene("serialization-test");
+            Skybox skybox;
+            skybox.Zenith = { 0.1f, 0.2f, 0.3f, 1.0f };
+            scene.SetSkybox(skybox);
             const EntityId cameraId = scene.CreateEntityWithId(10, "Camera");
             SceneEntity* camera = scene.FindEntity(cameraId);
             camera->Transform.LocalTransform.Position = { 0.0f, 1.0f, -5.0f };
@@ -344,6 +348,9 @@ namespace Jevaing::Internal
             success &= ReportTest(loaded.FindEntityByName("Child") != nullptr, "Entity name survives save/load");
             success &= ReportTest(loaded.FindEntity(20)->Parent == 10, "Parent relationship survives save/load");
             success &= ReportTest(loaded.FindEntity(10)->Camera.has_value(), "Camera component survives save/load");
+            success &= ReportTest(loaded.GetSkybox().has_value() &&
+                std::abs(loaded.GetSkybox()->Zenith.R - 0.1f) < 0.0001f,
+                "Skybox colors survive save/load");
 
             if (scene.Save(scenePath.string(), error))
             {

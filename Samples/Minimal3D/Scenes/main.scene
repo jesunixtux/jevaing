@@ -1,4 +1,7 @@
 scene=Minimal3D
+skybox.zenith=0.04,0.12,0.33,1
+skybox.horizon=0.48,0.7,0.94,1
+skybox.nadir=0.1,0.14,0.23,1
 
 [entity]
 id=1

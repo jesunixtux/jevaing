@@ -70,6 +70,10 @@ namespace Jevaing::Internal
             {
             }
 
+            void DrawSkybox(const Skybox&) override
+            {
+            }
+
             void DrawCube(
                 const Transform&,
                 const Color&

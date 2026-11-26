@@ -85,6 +85,10 @@ namespace Jevaing
         const std::vector<CollisionEvent3D>& GetCollisionEvents3D() const;
         const std::vector<CollisionEvent3D>& GetTriggerEvents3D() const;
 
+        void SetSkybox(const Skybox& skybox);
+        void ClearSkybox();
+        const std::optional<Skybox>& GetSkybox() const;
+
     private:
         static bool LoadFromFileSingle(const std::string& path,
             const std::string& assetRoot, Scene& scene, std::string& error);
@@ -102,6 +106,7 @@ namespace Jevaing
         EntityId m_nextEntityId = 1;
         bool m_started = false;
         PhysicsSettings m_physicsSettings;
+        std::optional<Skybox> m_skybox;
         PhysicsWorld2D m_physics2D;
         PhysicsWorld3D m_physics3D;
         double m_physicsAccumulator = 0.0;

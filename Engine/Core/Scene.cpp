@@ -739,6 +739,7 @@ namespace Jevaing
             const Transform cameraTransform = GetWorldTransform(primaryCamera->Id);
             camera.Position = cameraTransform.Position;
             graphics.SetCamera(camera);
+            if (m_skybox) graphics.DrawSkybox(*m_skybox);
         }
         else
         {
@@ -829,7 +830,14 @@ namespace Jevaing
         error.clear();
         std::ostringstream file;
 
-        file << "scene=" << m_name << "\n\n";
+        file << "scene=" << m_name << "\n";
+        if (m_skybox)
+        {
+            file << "skybox.zenith=" << ColorToString(m_skybox->Zenith) << "\n"
+                 << "skybox.horizon=" << ColorToString(m_skybox->Horizon) << "\n"
+                 << "skybox.nadir=" << ColorToString(m_skybox->Nadir) << "\n";
+        }
+        file << "\n";
 
         for (const SceneEntity& entity : m_entities)
         {
@@ -1059,6 +1067,20 @@ namespace Jevaing
                 {
                     loaded.m_name = value;
                     sawSceneName = !value.empty();
+                    continue;
+                }
+
+                if (key == "skybox.zenith" || key == "skybox.horizon" || key == "skybox.nadir")
+                {
+                    if (!loaded.m_skybox) loaded.m_skybox.emplace();
+                    Skybox& skybox = *loaded.m_skybox;
+                    Color& color = key == "skybox.zenith" ? skybox.Zenith :
+                        (key == "skybox.horizon" ? skybox.Horizon : skybox.Nadir);
+                    if (!ParseColor(value, color))
+                    {
+                        error = ParseError(key, lineNumber, path);
+                        return false;
+                    }
                     continue;
                 }
 
@@ -1678,6 +1700,21 @@ namespace Jevaing
     const std::vector<CollisionEvent3D>& Scene::GetTriggerEvents3D() const
     {
         return m_physics3D.GetTriggerEvents();
+    }
+
+    void Scene::SetSkybox(const Skybox& skybox)
+    {
+        m_skybox = skybox;
+    }
+
+    void Scene::ClearSkybox()
+    {
+        m_skybox.reset();
+    }
+
+    const std::optional<Skybox>& Scene::GetSkybox() const
+    {
+        return m_skybox;
     }
 
     EntityId Scene::AllocateEntityId()

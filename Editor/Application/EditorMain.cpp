@@ -879,7 +879,32 @@ namespace
 
         if (!entity)
         {
-            ImGui::TextUnformatted("No entity selected.");
+            ImGui::TextUnformatted("Scene Settings");
+            Jevaing::Scene& scene = EditableScene();
+            bool hasSkybox = scene.GetSkybox().has_value();
+            if (ImGui::Checkbox("Procedural skybox", &hasSkybox))
+            {
+                if (hasSkybox) scene.SetSkybox(Jevaing::Skybox{});
+                else scene.ClearSkybox();
+                MarkSceneChanged();
+            }
+            if (scene.GetSkybox())
+            {
+                Jevaing::Skybox skybox = *scene.GetSkybox();
+                auto editColor = [&](const char* label, Jevaing::Color& color)
+                {
+                    float rgb[] = { color.R, color.G, color.B };
+                    if (ImGui::ColorEdit3(label, rgb))
+                    {
+                        color.R = rgb[0]; color.G = rgb[1]; color.B = rgb[2];
+                        scene.SetSkybox(skybox);
+                        MarkSceneChanged();
+                    }
+                };
+                editColor("Zenith", skybox.Zenith);
+                editColor("Horizon", skybox.Horizon);
+                editColor("Nadir", skybox.Nadir);
+            }
             ImGui::End();
             return;
         }

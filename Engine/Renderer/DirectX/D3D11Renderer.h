@@ -94,6 +94,7 @@ namespace Jevaing::Internal
         ) override;
 
         void SetCamera(const PerspectiveCamera& camera) override;
+        void DrawSkybox(const Skybox& skybox) override;
 
         void DrawCube(
             const Transform& transform,
@@ -128,6 +129,7 @@ namespace Jevaing::Internal
         void AppendTestPattern();
         void Flush2DDrawCommands();
         void Flush3DDrawCommands();
+        void FlushSkybox();
         void ReleaseResources();
         bool GetOrCreateMeshResource(
             const Mesh& mesh,
@@ -152,6 +154,8 @@ namespace Jevaing::Internal
         std::size_t m_vertexCapacity = 0;
         std::uint64_t m_frameIndex = 0;
         PerspectiveCamera m_camera;
+        Skybox m_skybox;
+        bool m_hasSkybox = false;
         IDXGISwapChain* m_swapChain = nullptr;
         ID3D11Device* m_device = nullptr;
         ID3D11DeviceContext* m_context = nullptr;

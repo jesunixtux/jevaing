@@ -717,6 +717,7 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
 
     void D3D11Renderer::BeginFrame()
     {
+        m_hasSkybox = false;
         m_frame2DVertices.clear();
         m_2DDrawBatches.clear();
         m_3DDrawBatches.clear();
@@ -747,6 +748,7 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
 
     void D3D11Renderer::EndFrame()
     {
+        FlushSkybox();
         Flush3DDrawCommands();
         Flush2DDrawCommands();
 
@@ -824,6 +826,62 @@ float4 PSMain3D(VSOutput input) : SV_TARGET
     void D3D11Renderer::SetCamera(const PerspectiveCamera& camera)
     {
         m_camera = camera;
+    }
+
+    void D3D11Renderer::DrawSkybox(const Skybox& skybox)
+    {
+        m_skybox = skybox;
+        m_hasSkybox = true;
+    }
+
+    void D3D11Renderer::FlushSkybox()
+    {
+        if (!m_hasSkybox || !m_context || !EnsureVertexCapacity(12)) return;
+
+        const float dx = m_camera.Target.X - m_camera.Position.X;
+        const float dy = m_camera.Target.Y - m_camera.Position.Y;
+        const float dz = m_camera.Target.Z - m_camera.Position.Z;
+        const float length = std::sqrt(dx * dx + dy * dy + dz * dz);
+        const float horizonY = length > 0.0001f
+            ? std::clamp(-dy / length * 1.5f, -0.85f, 0.85f) : 0.0f;
+
+        const auto vertex = [](float x, float y, const Color& color)
+        { return MakeVertex(x, y, color); };
+        const D3D11Vertex vertices[] = {
+            vertex(-1.0f, 1.0f, m_skybox.Zenith),
+            vertex( 1.0f, 1.0f, m_skybox.Zenith),
+            vertex( 1.0f, horizonY, m_skybox.Horizon),
+            vertex(-1.0f, 1.0f, m_skybox.Zenith),
+            vertex( 1.0f, horizonY, m_skybox.Horizon),
+            vertex(-1.0f, horizonY, m_skybox.Horizon),
+            vertex(-1.0f, horizonY, m_skybox.Horizon),
+            vertex( 1.0f, horizonY, m_skybox.Horizon),
+            vertex( 1.0f,-1.0f, m_skybox.Nadir),
+            vertex(-1.0f, horizonY, m_skybox.Horizon),
+            vertex( 1.0f,-1.0f, m_skybox.Nadir),
+            vertex(-1.0f,-1.0f, m_skybox.Nadir)
+        };
+
+        D3D11_MAPPED_SUBRESOURCE mapped = {};
+        if (FAILED(m_context->Map(m_vertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)) ||
+            !mapped.pData) return;
+        std::memcpy(mapped.pData, vertices, sizeof(vertices));
+        m_context->Unmap(m_vertexBuffer, 0);
+
+        constexpr UINT stride = sizeof(D3D11Vertex);
+        constexpr UINT offset = 0;
+        D3D11ObjectConstants constants;
+        ID3D11ShaderResourceView* nullTexture = nullptr;
+        m_context->OMSetRenderTargets(1, &m_renderTargetView, nullptr);
+        m_context->IASetInputLayout(m_inputLayout);
+        m_context->IASetVertexBuffers(0, 1, &m_vertexBuffer, &stride, &offset);
+        m_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        m_context->VSSetShader(m_vertexShader2D, nullptr, 0);
+        m_context->PSSetShader(m_pixelShader2D, nullptr, 0);
+        m_context->PSSetConstantBuffers(0, 1, &m_constantBuffer);
+        m_context->PSSetShaderResources(0, 1, &nullTexture);
+        m_context->UpdateSubresource(m_constantBuffer, 0, nullptr, &constants, 0, 0);
+        m_context->Draw(12, 0);
     }
 
     ID3D11ShaderResourceView* D3D11Renderer::GetOrCreateTextureView(
