@@ -999,6 +999,7 @@ namespace Jevaing
 
         Scene loaded;
         SceneEntity* current = nullptr;
+        bool sawSceneName = false;
         std::vector<std::pair<EntityId, EntityId>> parentLinks;
 
         std::string line;
@@ -1057,6 +1058,7 @@ namespace Jevaing
                 if (key == "scene")
                 {
                     loaded.m_name = value;
+                    sawSceneName = !value.empty();
                     continue;
                 }
 
@@ -1574,6 +1576,12 @@ namespace Jevaing
                     return false;
                 }
             }
+        }
+
+        if (!sawSceneName || current)
+        {
+            error = "Scene file is incomplete: " + path;
+            return false;
         }
 
         for (const auto& link : parentLinks)

@@ -349,7 +349,7 @@ namespace Jevaing::Internal
             {
                 {
                     std::ofstream damaged(scenePath, std::ios::trunc);
-                    damaged << "invalid scene data\n";
+                    damaged << "scene=damaged\n[entity]\nid=99\n";
                 }
                 Scene recovered;
                 success &= ReportTest(Scene::LoadFromFile(scenePath.string(), ".", recovered, error) &&

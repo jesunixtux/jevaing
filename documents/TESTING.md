@@ -1,4 +1,4 @@
-# Test status / Estado de pruebas — 2026-11-25
+# Test status / Estado de pruebas — 2026-11-26
 
 Local Windows MSVC 2022 Debug and Release builds succeeded for `JevaingSandbox`, `JevaingEditor` and `JevaingCSample` in a fresh CMake directory. The existing `build` cache failed because it referenced a removed Visual Studio Build Tools instance; a new `build-codex` configuration succeeded.
 
@@ -11,4 +11,6 @@ With `JEVAING_ENABLE_NATIVE_MODULES=ON`, `JevaingModuleSmokeTest` passed in Debu
 
 With `JEVAING_ENABLE_MODS=ON`, `JevaingModContentTest` passed in Debug and Release. It checks default disabled policy, game/version and dependency compatibility, path rejection, asset/map lookup, optional overrides and preservation of original files. The resolver is not yet wired into ordinary game asset loading.
 
-Still unverified: clean-machine runtime dependencies, GUI interaction, real game code in editor Play, Linux/macOS, optional modules/mods/audio/recovery. CI now requests Debug and Release but its result must be observed before claiming a remote pass.
+On 2026-11-26, Debug `--self-test` and `--scene-serialization-test` passed after adding recovery from a corrupt main project/scene file. A subsequent change rejects an unclosed scene entity and changes the corruption fixture to test that case. This final change remains unbuilt: the next Release build stopped in MSBuild `ZERO_CHECK` with MSB8036 because Windows SDK 10.0.28000.0 was no longer present. SDK discovery found no `Windows Kits` directory at its registered path. Debug and Release need to be rerun after restoring the SDK.
+
+Still unverified: clean-machine runtime dependencies, GUI interaction, real game code in editor Play, Linux/macOS, audio and encrypted source recovery. Native module and content mod smoke tests cover their implemented subset only. CI now requests Debug and Release but its result must be observed before claiming a remote pass.

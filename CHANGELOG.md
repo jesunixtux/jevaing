@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Validate project names and confine project/resource paths to the project directory.
-- Save project and scene files through a temporary file, retain a `.bak` copy and recover when the main file is missing.
+- Save project and scene files through a temporary file, retain a `.bak` copy and recover when the main file is missing or invalid. Reject truncated scene entities.
 - Replace shell based CMake invocation with Windows process creation and require explicit trust for project CMake scripts.
 - Stage only selected scenes and update exported startup scene metadata.
 - Give editor Play snapshots unique names and remove them after loading.
