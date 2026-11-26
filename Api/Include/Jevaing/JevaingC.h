@@ -9,10 +9,15 @@ extern "C" {
 #define JEVAING_C_INVALID_ARGUMENT (-1)
 #define JEVAING_C_INVALID_STATE (-2)
 #define JEVAING_C_INTERNAL_ERROR (-3)
+#define JEVAING_C_NOT_FOUND (-4)
+#define JEVAING_C_IO_ERROR (-5)
 typedef struct jevaing_vec2 { float x, y; } jevaing_vec2;
 typedef struct jevaing_vec3 { float x, y, z; } jevaing_vec3;
 typedef struct jevaing_color { float r, g, b, a; } jevaing_color;
 typedef struct jevaing_transform { jevaing_vec3 position, rotation, scale; } jevaing_transform;
+typedef struct jevaing_scene jevaing_scene;
+typedef uint64_t jevaing_entity_id;
+#define JEVAING_INVALID_ENTITY_ID UINT64_C(0)
 typedef int32_t jevaing_key;
 enum {
     JEVAING_KEY_W=1, JEVAING_KEY_A=2, JEVAING_KEY_S=3, JEVAING_KEY_D=4,
@@ -44,6 +49,19 @@ int32_t jevaing_key_down(jevaing_key key);
 int32_t jevaing_clear(jevaing_color color);
 int32_t jevaing_draw_quad(jevaing_vec2 center, jevaing_vec2 size, jevaing_color color);
 int32_t jevaing_draw_cube(jevaing_transform transform, jevaing_color color);
+/* The caller owns the opaque scene and must destroy it exactly once.
+   Scene and entity operations are not thread-safe. IDs remain valid until
+   deletion or a successful scene load; they are not pointers. */
+int32_t jevaing_scene_create(const char* name, jevaing_scene** out_scene);
+int32_t jevaing_scene_destroy(jevaing_scene* scene);
+int32_t jevaing_scene_load(jevaing_scene* scene, const char* path, const char* asset_root);
+int32_t jevaing_scene_save(const jevaing_scene* scene, const char* path);
+int32_t jevaing_scene_entity_count(const jevaing_scene* scene, uint64_t* out_count);
+int32_t jevaing_scene_entity_create(jevaing_scene* scene, const char* name, jevaing_entity_id* out_id);
+int32_t jevaing_scene_entity_destroy(jevaing_scene* scene, jevaing_entity_id id);
+int32_t jevaing_scene_entity_set_parent(jevaing_scene* scene, jevaing_entity_id child, jevaing_entity_id parent);
+int32_t jevaing_scene_entity_get_transform(const jevaing_scene* scene, jevaing_entity_id id, jevaing_transform* out_transform);
+int32_t jevaing_scene_entity_set_transform(jevaing_scene* scene, jevaing_entity_id id, const jevaing_transform* transform);
 #ifdef __cplusplus
 }
 #endif

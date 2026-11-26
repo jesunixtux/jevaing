@@ -1,6 +1,10 @@
 #include <Jevaing/JevaingC.h>
 #include <Jevaing/Jevaing.h>
 #include <atomic>
+struct jevaing_scene {
+    Jevaing::Scene value;
+    explicit jevaing_scene(const char* name) : value(name) {}
+};
 namespace {
     std::atomic_flag running = ATOMIC_FLAG_INIT;
     struct RunGuard { ~RunGuard() { running.clear(); } };
@@ -74,4 +78,93 @@ extern "C" int32_t jevaing_draw_cube(jevaing_transform t,jevaing_color c) {
     if(!g3) return JEVAING_C_INVALID_STATE;
     try { Jevaing::Transform x; x.Position=vec(t.position); x.Rotation=vec(t.rotation); x.Scale=vec(t.scale);
         g3->DrawCube(x,color(c)); return JEVAING_C_OK; } catch(...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_scene_create(const char* name, jevaing_scene** out_scene) {
+    if (!name || !out_scene) return JEVAING_C_INVALID_ARGUMENT;
+    *out_scene = nullptr;
+    try { *out_scene = new jevaing_scene(name); return JEVAING_C_OK; }
+    catch (...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_scene_destroy(jevaing_scene* scene) {
+    if (!scene) return JEVAING_C_INVALID_ARGUMENT;
+    try { delete scene; return JEVAING_C_OK; }
+    catch (...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_scene_load(jevaing_scene* scene, const char* path, const char* asset_root) {
+    if (!scene || !path || !*path || !asset_root) return JEVAING_C_INVALID_ARGUMENT;
+    try {
+        std::string error;
+        return scene->value.Load(path, asset_root, error) ? JEVAING_C_OK : JEVAING_C_IO_ERROR;
+    } catch (...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_scene_save(const jevaing_scene* scene, const char* path) {
+    if (!scene || !path || !*path) return JEVAING_C_INVALID_ARGUMENT;
+    try {
+        std::string error;
+        return scene->value.Save(path, error) ? JEVAING_C_OK : JEVAING_C_IO_ERROR;
+    } catch (...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_scene_entity_count(const jevaing_scene* scene, uint64_t* out_count) {
+    if (!scene || !out_count) return JEVAING_C_INVALID_ARGUMENT;
+    try { *out_count = static_cast<uint64_t>(scene->value.GetEntities().size()); return JEVAING_C_OK; }
+    catch (...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_scene_entity_create(jevaing_scene* scene, const char* name,
+    jevaing_entity_id* out_id) {
+    if (!scene || !name || !out_id) return JEVAING_C_INVALID_ARGUMENT;
+    *out_id = JEVAING_INVALID_ENTITY_ID;
+    try {
+        *out_id = scene->value.CreateEntity(name);
+        return *out_id ? JEVAING_C_OK : JEVAING_C_INTERNAL_ERROR;
+    } catch (...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_scene_entity_destroy(jevaing_scene* scene, jevaing_entity_id id) {
+    if (!scene || !id) return JEVAING_C_INVALID_ARGUMENT;
+    try { return scene->value.DestroyEntity(id) ? JEVAING_C_OK : JEVAING_C_NOT_FOUND; }
+    catch (...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_scene_entity_set_parent(jevaing_scene* scene,
+    jevaing_entity_id child, jevaing_entity_id parent) {
+    if (!scene || !child || child == parent) return JEVAING_C_INVALID_ARGUMENT;
+    try {
+        if (!scene->value.FindEntity(child) || (parent && !scene->value.FindEntity(parent)))
+            return JEVAING_C_NOT_FOUND;
+        if (!parent) return scene->value.RemoveParent(child) ? JEVAING_C_OK : JEVAING_C_NOT_FOUND;
+        return scene->value.SetParent(child, parent) ? JEVAING_C_OK : JEVAING_C_INVALID_ARGUMENT;
+    } catch (...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_scene_entity_get_transform(const jevaing_scene* scene,
+    jevaing_entity_id id, jevaing_transform* out_transform) {
+    if (!scene || !id || !out_transform) return JEVAING_C_INVALID_ARGUMENT;
+    try {
+        const auto* entity = scene->value.FindEntity(id);
+        if (!entity) return JEVAING_C_NOT_FOUND;
+        const auto& t = entity->Transform.LocalTransform;
+        *out_transform = {{t.Position.X,t.Position.Y,t.Position.Z},
+            {t.Rotation.X,t.Rotation.Y,t.Rotation.Z}, {t.Scale.X,t.Scale.Y,t.Scale.Z}};
+        return JEVAING_C_OK;
+    } catch (...) { return JEVAING_C_INTERNAL_ERROR; }
+}
+
+extern "C" int32_t jevaing_scene_entity_set_transform(jevaing_scene* scene,
+    jevaing_entity_id id, const jevaing_transform* transform) {
+    if (!scene || !id || !transform) return JEVAING_C_INVALID_ARGUMENT;
+    try {
+        auto* entity = scene->value.FindEntity(id);
+        if (!entity) return JEVAING_C_NOT_FOUND;
+        auto& t = entity->Transform.LocalTransform;
+        t.Position = vec(transform->position);
+        t.Rotation = vec(transform->rotation);
+        t.Scale = vec(transform->scale);
+        return JEVAING_C_OK;
+    } catch (...) { return JEVAING_C_INTERNAL_ERROR; }
 }

@@ -21,6 +21,10 @@ static void stop(void* p) { ((state*)p)->stops++; }
 static int abi_test(void) {
     jevaing_game_desc d=JEVAING_GAME_DESC_INIT;
     jevaing_color c={0,0,0,1};
+    jevaing_scene* scene=NULL;
+    jevaing_entity_id parent=0,child=0;
+    uint64_t count=0;
+    jevaing_transform transform={{1,2,3},{0,0,0},{1,1,1}}, restored;
     if(jevaing_abi_version()!=JEVAING_C_ABI_VERSION || !jevaing_engine_version() ||
        jevaing_run(NULL,0,NULL)!=JEVAING_C_INVALID_ARGUMENT ||
        jevaing_clear(c)!=JEVAING_C_INVALID_STATE ||
@@ -31,13 +35,49 @@ static int abi_test(void) {
     if(jevaing_run(&d,0,NULL)!=JEVAING_C_INVALID_ARGUMENT) return 2;
     d.struct_size=(uint32_t)sizeof(d); d.width=0;
     if(jevaing_run(&d,0,NULL)!=JEVAING_C_INVALID_ARGUMENT) return 2;
+    if(jevaing_scene_create("C scene",&scene)!=JEVAING_C_OK || !scene ||
+       jevaing_scene_entity_create(scene,"Parent",&parent)!=JEVAING_C_OK ||
+       jevaing_scene_entity_create(scene,"Child",&child)!=JEVAING_C_OK ||
+       jevaing_scene_entity_set_parent(scene,child,parent)!=JEVAING_C_OK ||
+       jevaing_scene_entity_set_parent(scene,parent,child)!=JEVAING_C_INVALID_ARGUMENT ||
+       jevaing_scene_entity_set_transform(scene,child,&transform)!=JEVAING_C_OK ||
+       jevaing_scene_entity_get_transform(scene,child,&restored)!=JEVAING_C_OK ||
+       restored.position.x!=1 || restored.position.y!=2 || restored.scale.z!=1 ||
+       jevaing_scene_entity_count(scene,&count)!=JEVAING_C_OK || count!=2 ||
+       jevaing_scene_entity_destroy(scene,parent)!=JEVAING_C_OK ||
+       jevaing_scene_entity_destroy(scene,parent)!=JEVAING_C_NOT_FOUND ||
+       jevaing_scene_entity_count(scene,&count)!=JEVAING_C_OK || count!=1 ||
+       jevaing_scene_destroy(scene)!=JEVAING_C_OK) return 2;
     puts("[PASS] Pure C header, linkage and ABI validation."); return 0;
+}
+static int scene_roundtrip_test(const char* path) {
+    jevaing_scene* scene=NULL;
+    jevaing_entity_id id=0;
+    jevaing_transform value={{4,5,6},{0,0,0},{1,1,1}}, loaded={0};
+    uint64_t count=0;
+    int ok=1;
+    if(jevaing_scene_create("C roundtrip",&scene)!=JEVAING_C_OK) return 2;
+    ok &= jevaing_scene_entity_create(scene,"Player",&id)==JEVAING_C_OK;
+    ok &= jevaing_scene_entity_set_transform(scene,id,&value)==JEVAING_C_OK;
+    ok &= jevaing_scene_save(scene,path)==JEVAING_C_OK;
+    jevaing_scene_destroy(scene); scene=NULL;
+    if(jevaing_scene_create("empty",&scene)!=JEVAING_C_OK) return 2;
+    ok &= jevaing_scene_load(scene,path,"")==JEVAING_C_OK;
+    ok &= jevaing_scene_entity_count(scene,&count)==JEVAING_C_OK && count==1;
+    ok &= jevaing_scene_entity_get_transform(scene,id,&loaded)==JEVAING_C_OK;
+    ok &= loaded.position.x==4 && loaded.position.y==5 && loaded.position.z==6;
+    jevaing_scene_destroy(scene);
+    remove(path);
+    if(ok) puts("[PASS] Pure C scene save/load roundtrip.");
+    return ok ? 0 : 2;
 }
 int main(int argc,char** argv) {
     state s={0}; jevaing_game_desc d=JEVAING_GAME_DESC_INIT;
     int runtime_test=0,i;
     for(i=1;i<argc;++i) {
         if(strcmp(argv[i],"--abi-test")==0) return abi_test();
+        if(strcmp(argv[i],"--scene-roundtrip-test")==0)
+            return i+1<argc ? scene_roundtrip_test(argv[i+1]) : 2;
         if(strcmp(argv[i],"--runtime-test")==0) runtime_test=1;
     }
     d.user_data=&s; d.on_start=start; d.on_update=update;
