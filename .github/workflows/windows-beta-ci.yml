@@ -51,6 +51,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "C scene roundtrip failed" }
           & .\build\bin\${{ matrix.configuration }}\JevaingCSample.exe --runtime-test --renderer null --frames 2
           if ($LASTEXITCODE -ne 0) { throw "C game lifecycle failed" }
+          & .\build\bin\${{ matrix.configuration }}\JevaingCSample.exe --physics-test
+          if ($LASTEXITCODE -ne 0) { throw "C physics test failed" }
+          & .\build\bin\${{ matrix.configuration }}\JevaingCSample.exe --asset-test geometry/texture/base.png
+          if ($LASTEXITCODE -ne 0) { throw "C texture test failed" }
       - name: Verify generated game build
         shell: pwsh
         run: |
