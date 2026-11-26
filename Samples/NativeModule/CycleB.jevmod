@@ -1,0 +1,5 @@
+name=CycleB
+version=1.0.0
+abi=1
+library=JevaingSmokeModule.dll
+dependency=CycleA@1

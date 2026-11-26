@@ -1,0 +1,4 @@
+name=BaseModule
+version=1.0.0
+abi=1
+library=JevaingBaseModule.dll

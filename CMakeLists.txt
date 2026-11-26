@@ -16,6 +16,11 @@ option(JEVAING_BUILD_EDITOR "Build the Jevaing first-party editor." ON)
 option(JEVAING_BUILD_XBOX_SMOKE_TEST "Build the experimental Xbox smoke test sample." ON)
 option(JEVAING_ENABLE_PHYSICS_2D "Build Jevaing 2D physics support." ON)
 option(JEVAING_ENABLE_PHYSICS_3D "Build Jevaing 3D physics support." ON)
+option(JEVAING_ENABLE_NATIVE_MODULES "Build the trusted native module loader and smoke test (Windows only)." OFF)
+
+if(JEVAING_ENABLE_NATIVE_MODULES AND NOT WIN32)
+    message(FATAL_ERROR "Native modules are currently implemented only on Windows.")
+endif()
 
 include(FetchContent)
 
@@ -308,4 +313,11 @@ if(JEVAING_BUILD_C_SAMPLE)
         RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_CURRENT_BINARY_DIR}/bin/Debug"
         RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_BINARY_DIR}/bin/Release")
     target_link_libraries(JevaingCSample PRIVATE JevaingEngine)
+endif()
+
+if(JEVAING_ENABLE_NATIVE_MODULES)
+    add_library(JevaingModules STATIC Engine/Modules/ModuleManager.cpp)
+    target_compile_features(JevaingModules PUBLIC cxx_std_17)
+    target_link_libraries(JevaingModules PUBLIC JevaingApi)
+    add_subdirectory(Samples/NativeModule)
 endif()
