@@ -1,6 +1,7 @@
 # Root-only build products. Do not ignore Engine/Build source files.
 /.vs/
 /build/
+/build-codex/
 /build-minimal3d/
 /build-physics3d/
 /build-physics2d/

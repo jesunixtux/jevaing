@@ -9,13 +9,17 @@ on:
 jobs:
   windows:
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
     steps:
       - uses: actions/checkout@v4
       - name: Configure engine and editor
         run: cmake -S . -B build -DJEVAING_BUILD_C_SAMPLE=ON -DJEVAING_BUILD_EDITOR=ON -DJEVAING_BUILD_XBOX_SMOKE_TEST=OFF
       - name: Compile engine, editor and sandbox
-        run: cmake --build build --config Debug --target JevaingSandbox JevaingEditor JevaingCSample
+        run: cmake --build build --config ${{ matrix.configuration }} --target JevaingSandbox JevaingEditor JevaingCSample
       - name: Run headless engine tests
         shell: pwsh
         run: |
@@ -23,6 +27,7 @@ jobs:
           $tests = @(
             "--self-test",
             "--project-template-test",
+            "--scene-serialization-test",
             "--editor-scene-roundtrip-test",
             "--playmode-restore-test",
             "--physics-info",
@@ -31,18 +36,18 @@ jobs:
             "--xbox-build-environment-test"
           )
           foreach ($test in $tests) {
-            & .\bin\Debug\JevaingSandbox.exe $test
+            & .\bin\${{ matrix.configuration }}\JevaingSandbox.exe $test
             if ($LASTEXITCODE -ne 0) { throw "FAILED: $test" }
           }
-          & .\bin\Debug\JevaingEditor.exe --editor-info
+          & .\bin\${{ matrix.configuration }}\JevaingEditor.exe --editor-info
           if ($LASTEXITCODE -ne 0) { throw "Editor info smoke failed" }
       - name: Validate pure C game ABI
         shell: pwsh
         run: |
-          & .\build\bin\Debug\JevaingCSample.exe --abi-test
+          & .\build\bin\${{ matrix.configuration }}\JevaingCSample.exe --abi-test
           if ($LASTEXITCODE -ne 0) { throw "C ABI test failed" }
       - name: Verify generated game build
         shell: pwsh
         run: |
-          & .\bin\Debug\JevaingSandbox.exe --windows-build-test
+          & .\bin\${{ matrix.configuration }}\JevaingSandbox.exe --windows-build-test
           if ($LASTEXITCODE -ne 0) { throw "Windows game export test failed" }

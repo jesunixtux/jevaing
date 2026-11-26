@@ -23,3 +23,12 @@ API C v1 experimental, muestra C11 pura y prueba de ABI en CI. Se conserva C++17
 4. Play Mode ejecutando código real de proyectos en proceso separado.
 5. SDK instalable, Lua opt-in, módulos externos versionados.
 6. Precuela de JumpFall como juego 2D independiente de prueba; requiere audio, input, colisiones, escenas y guardado.
+
+## Avance posterior a la auditoría
+
+- P0 mitigado: el exportador dejó de usar `std::system`, valida nombre/rutas y exige confianza explícita antes de ejecutar CMake del proyecto.
+- P1 parcialmente mitigado: Project y Scene guardan con archivo temporal y copia `.bak`; se recupera cuando falta el archivo principal. Falta probar cortes reales de energía y sincronización durable.
+- P1 parcialmente mitigado: el test de exportación ejecuta dos frames del juego generado. Falta validación en Windows limpio sin código fuente ni herramientas de desarrollo.
+- P1 pendiente: Play del editor todavía no ejecuta el código real del juego.
+- P2 en progreso: Debug y Release compilaron y pasaron las pruebas locales, incluida la exportación de juego con arranque de dos frames; CI solicita ambas configuraciones y sus resultados remotos aún deben comprobarse. La ABI C v1 continúa experimental.
+- Módulos dinámicos, mods, Lua, audio y recuperación cifrada siguen pendientes.

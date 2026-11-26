@@ -414,3 +414,7 @@ Si archivos C/C++ generados no compilan, asegúrate de que esten bajo el directo
 Mantener los cambios de API publica neutrales respecto al backend. La implementacion especifica de backend pertenece a internals del motor. Las dependencias exclusivas del editor deben permanecer linkeadas solo a `JevaingEditor`, no a ejecutables externos de juego.
 
 Al agregar soporte de plataforma, preferir smoke tests pequenos antes de portar todo el motor. Xbox debe seguir marcado como no verificado hasta que la validacion en hardware real sea completada por el usuario.
+
+# Actualización del 25-11-2026
+
+Los nombres y rutas de proyectos se validan; el guardado de proyectos y escenas usa archivo temporal y copia `.bak`. La exportación Windows exige confiar explícitamente en los scripts CMake del proyecto y prepara las escenas seleccionadas. El editor sigue reproduciendo una copia de la escena: aún no ejecuta el código real del juego en Play. La ABI C v1 continúa experimental. Véase `TESTING.md` para pruebas ejecutadas y limitaciones.

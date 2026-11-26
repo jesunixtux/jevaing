@@ -3,6 +3,8 @@
 Version: `0.0.14`
 Status: early prototype, not production ready
 
+2026-11-25 update: project names and paths are validated; project/scene saves retain a backup; Windows export requires explicit trust for project CMake scripts, stages selected scenes and can run a two-frame export smoke test. Editor Play still previews a scene copy rather than running game code. C ABI v1 remains experimental. See `TESTING.md` for executed checks.
+
 ## 1. Overview
 
 Jevaing is an experimental C++17 game engine built with CMake. Its current focus is to provide a small but usable foundation for standalone games, engine samples, editor tooling, 2D/3D rendering, physics, and early platform target preparation.

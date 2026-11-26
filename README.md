@@ -2,6 +2,10 @@
 
 Jevaing is an experimental open-source graphics and game engine written in C++17 and built with CMake.
 
+The C11 ABI is experimental. Windows desktop is the only graphical platform currently implemented. The editor's Play Mode simulates a copy of the scene; it does not run the project's compiled game code. Lua, audio, dynamic modules, mods, prefabs and encrypted project recovery are pending.
+
+See [architecture](ARCHITECTURE.md), [roadmap](ROADMAP.md), [build guide](documents/BUILD.md), [C API](documents/C-API.md), [editor](documents/EDITOR.md) and [test status](documents/TESTING.md) for the current implementation and limits.
+
 > **Current version:** `0.0.14`
 >
 > **Codename:** `TBD`
@@ -47,7 +51,6 @@ The editor currently provides:
 - Project Browser: create/open project.
 - Hierarchy: select, create, delete and parent/child display.
 - Inspector: edit name/transform and add/remove core components.
-- Scene View: MVP editor-rendered grid/bounds preview.
 - Scene View: editor-rendered grid/bounds preview with independent view pan/zoom.
 - Project/Assets: scans assets/scenes.
 - Console: receives `Logger` events through an internal sink while stdout/stderr still work.
@@ -59,6 +62,7 @@ The editor currently provides:
 - Windows menu: show/hide editor panels from the top menu bar.
 - Unsaved scene warning before closing the editor, closing a project or loading another project/scene.
 - Build Settings: Windows Desktop x64 build and target availability display.
+- Building requires explicitly trusting the opened project's CMake scripts. Project and asset paths are confined to the project directory.
 
 Known editor limitation: Scene/Game are not yet final D3D11 offscreen runtime render targets. They are MVP editor previews for selection, camera framing, primitive layout and physics feedback.
 
