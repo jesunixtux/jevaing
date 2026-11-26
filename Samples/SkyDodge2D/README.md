@@ -1,23 +1,25 @@
 # SkyDodge2D
 
-Juego 2D de prueba hecho con Jevaing. Mueve la nave con **A/D** o las flechas, recoge los cuadrados dorados y esquiva los rojos. **Espacio** reinicia tras perder tres vidas. La barra superior muestra puntos y los tres cuadros de la esquina muestran vidas.
+Minijuego 2D hecho con Jevaing. Recoge **8 cuadrados dorados** antes de perder tus **3 vidas** por tocar los rojos. La pantalla muestra el objetivo, los controles, vidas y puntuación.
 
-Desde la raíz del repositorio:
+- **Enter:** iniciar una partida o volver a jugar tras ganar/perder.
+- **A/D** o **flechas izquierda/derecha:** mover la nave.
+- **Espacio:** pausar y continuar.
+
+## Jugar en otra PC
+
+Descarga o copia `Builds/SkyDodge2D-Windows-x64-Release.zip`, extrae **todo** el ZIP y abre `SkyDodge2D.exe`. El juego incluye el código de Jevaing y el runtime de C/C++ enlazados dentro del ejecutable. No hay que instalar Jevaing ni el Visual C++ Redistributable. Requiere Windows de 64 bits con los componentes de sistema DirectX 11, D3DCompiler 47 y XInput 1.4; no se ha probado todavía en un equipo Windows limpio.
+
+Conserva `jevaing.project` y `Scenes/main.scene` junto al EXE dentro de la carpeta extraída. No necesita imágenes, fuentes ni bibliotecas de terceros por separado. La colisión simple de este minijuego está implementada en el propio juego; no prueba Box2D.
+
+## Compilar y verificar
+
+Desde la raíz del repositorio, con CMake y MSVC instalados **solo en el equipo de compilación**:
 
 ```powershell
-cmake -S Samples/SkyDodge2D -B build-skydodge
-cmake --build build-skydodge --config Debug --target SkyDodge2D
-build-skydodge/bin/Debug/SkyDodge2D.exe --logic-test
-build-skydodge/bin/Debug/SkyDodge2D.exe --renderer null --frames 2
-build-skydodge/bin/Debug/SkyDodge2D.exe
+cmake -S Samples/SkyDodge2D -B build-skydodge-portable
+cmake --build build-skydodge-portable --config Release --target SkyDodge2D
+.\Samples\SkyDodge2D\VerifyPortable.ps1
 ```
 
-Para crear el ZIP Release después de compilar `SkyDodge2D` en `build-codex`:
-
-```powershell
-.\Samples\SkyDodge2D\Package.ps1
-```
-
-El ejecutable lee `jevaing.project` y la escena junto a sí mismo. El juego usa dibujo 2D, teclado, ciclo de vida, proyecto y carga de escena del motor. No requiere imágenes externas. La colisión sencilla del minijuego está en su propio código y no prueba Box2D.
-
-La copia Release para probar está en `Builds/Windows-x64-Release/SkyDodge2D.exe` y el ZIP en `Builds/SkyDodge2D-Windows-x64-Release.zip` después de compilar y empaquetar localmente. Extrae el ZIP completo antes de abrir el ejecutable; necesita `Scenes/main.scene` y `jevaing.project` en la misma carpeta base. El ZIP se verificó en este equipo, no en una instalación limpia de Windows.
+El CMake del prototipo usa `/MT` para enlazar el runtime de Visual C++ de forma estática. `VerifyPortable.ps1` comprueba la tabla de importaciones, la lógica del juego, la ejecución de dos fotogramas y el ZIP extraído en una carpeta temporal fuera del repositorio. `Package.ps1` genera únicamente el ZIP si ya compilaste el EXE portable.

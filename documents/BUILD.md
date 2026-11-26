@@ -13,3 +13,5 @@ The editor's Build Settings requires explicit trust for the project's CMake scri
 Options currently include `JEVAING_BUILD_EDITOR`, `JEVAING_BUILD_SANDBOX`, `JEVAING_BUILD_C_SAMPLE`, `JEVAING_BUILD_SKYDODGE_SAMPLE` (off by default), `JEVAING_ENABLE_PHYSICS_2D`, `JEVAING_ENABLE_PHYSICS_3D`, `JEVAING_ENABLE_NATIVE_MODULES` (off by default; Windows only), `JEVAING_ENABLE_MODS` (off by default) and the experimental Xbox smoke target. Runtime and SDK are not yet separately packaged products.
 
 To build the optional trusted DLL loader and its sample, configure with `-DJEVAING_ENABLE_NATIVE_MODULES=ON` and build `JevaingModuleSmokeTest`. The loader is not linked into ordinary game executables unless they explicitly link `JevaingModules`.
+
+The independent `Samples/SkyDodge2D` CMake project builds the game and its linked engine code with `/MT` in Release. Run `Samples/SkyDodge2D/VerifyPortable.ps1` after building it; the script checks PE imports, creates a ZIP and launches an extracted copy outside the source tree. See `Samples/SkyDodge2D/README.md`. This portability check has run locally but still needs a clean Windows machine.

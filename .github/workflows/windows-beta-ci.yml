@@ -80,3 +80,20 @@ jobs:
         run: |
           & ".\build\Samples\ModContent\${{ matrix.configuration }}\JevaingModContentTest.exe" ".\Samples\ModContent"
           if ($LASTEXITCODE -ne 0) { throw "Mod content test failed" }
+
+  portable-game:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure portable 2D game
+        run: cmake -S Samples/SkyDodge2D -B build-portable -G "Visual Studio 17 2022" -A x64
+      - name: Build portable Release
+        run: cmake --build build-portable --config Release --target SkyDodge2D
+      - name: Check runtime imports and extracted package
+        shell: pwsh
+        run: .\Samples\SkyDodge2D\VerifyPortable.ps1 -ExecutablePath .\build-portable\bin\Release\SkyDodge2D.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SkyDodge2D-Windows-x64-Release
+          path: Samples/SkyDodge2D/Builds/SkyDodge2D-Windows-x64-Release.zip

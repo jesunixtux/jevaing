@@ -1,4 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+    CACHE STRING "Link the portable game to the static MSVC runtime" FORCE)
 project(SkyDodge2D LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -17,6 +19,7 @@ set(JEVAING_BUILD_SANDBOX OFF CACHE BOOL "" FORCE)
 set(JEVAING_BUILD_EDITOR OFF CACHE BOOL "" FORCE)
 set(JEVAING_BUILD_XBOX_SMOKE_TEST OFF CACHE BOOL "" FORCE)
 set(JEVAING_ENABLE_PHYSICS_3D OFF CACHE BOOL "" FORCE)
+set(JEVAING_ENABLE_PHYSICS_2D OFF CACHE BOOL "" FORCE)
 add_subdirectory("${JEVAING_ENGINE_ROOT}" JevaingBuild)
 
 add_executable(SkyDodge2D Source/Game.cpp)

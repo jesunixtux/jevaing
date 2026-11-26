@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $sampleRoot = $PSScriptRoot
 $engineRoot = (Resolve-Path (Join-Path $sampleRoot '../..')).Path
 if (-not $ExecutablePath) {
-    $ExecutablePath = Join-Path $engineRoot 'build-codex/bin/Release/SkyDodge2D.exe'
+    $ExecutablePath = Join-Path $engineRoot 'build-skydodge-portable/bin/Release/SkyDodge2D.exe'
 }
 if (-not (Test-Path -LiteralPath $ExecutablePath -PathType Leaf)) {
     throw "Build SkyDodge2D Release first: $ExecutablePath"

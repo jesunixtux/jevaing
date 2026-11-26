@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Improve SkyDodge2D with a start screen, pixel text, an eight-gold win condition, pause/resume, restart and hit feedback.
+- Build the standalone 2D sample with a static MSVC runtime and verify its ZIP has no Jevaing or Visual C++ runtime DLL imports.
+- Preserve short keyboard press/release events that occur within one input frame.
 - Add a serializable procedural 3D skybox with DirectX 11 background rendering and editor color controls.
 - Add the small playable `SkyDodge2D` game sample and deterministic gameplay logic check.
 - Validate project names and confine project/resource paths to the project directory.
